@@ -2062,17 +2062,13 @@ function confirmAssignment() {
   recalcCumulative(fy);
   assignDirty = false;
   acceptedOverrides.clear();
-
-  // デバッグ用：保存内容を画面表示
-  const assData = DB.assignments[k] || {};
-  const entries = Object.entries(assData).map(([d,id])=>{
-    const doc = DB.doctors.find(dc=>dc.id===id);
-    return d + ': ' + (doc?doc.name:id);
-  }).join('\n');
-  const msg = `【保存内容確認】${year}年${month}月\n件数: ${Object.keys(assData).length}件\n\n${entries}\n\n---\nこの内容で保存しますか？`;
-  if (!confirm(msg)) return;
-
-  saveDB(() => alert('✅ 保存成功しました！'));
+  // assignments と cumulative だけ部分更新（DB全体の上書きをしない）
+  // ハイフン入りキーはdot notationが使えないためネストオブジェクトで更新
+  const newAssignments = Object.assign({}, DB.assignments);
+  const newCumulative = Object.assign({}, DB.cumulative);
+  DOC_REF.update({ assignments: newAssignments, cumulative: newCumulative })
+    .then(() => alert('✅ 当番表を確定・保存しました'))
+    .catch(e => alert('⚠️ 保存失敗: ' + e.message));
 }
 
 function resetAssignment() {
@@ -2087,7 +2083,11 @@ function resetAssignment() {
     delete DB.assignments[k];
     const fy=month>=4?year:year-1;
     recalcCumulative(fy);
-    saveDB();
+    // assignments と cumulative だけ部分更新
+    const newAssignments = Object.assign({}, DB.assignments);
+    const newCumulative = Object.assign({}, DB.cumulative);
+    DOC_REF.update({ assignments: newAssignments, cumulative: newCumulative })
+      .catch(e => console.error('reset error:', e));
     renderAssignCal(year, month);
     renderShiftTargets(year, month);
     btn.textContent = '🔄 割り振りリセット';
