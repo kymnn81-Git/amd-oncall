@@ -2,43 +2,698 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>データ復元ツール</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>先端医療開発科 オンコール管理</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <style>
-body { font-family: sans-serif; padding: 20px; max-width: 640px; margin: 0 auto; background:#f8fafc; }
-h2 { color: #1e293b; }
-.card { background: white; border-radius: 12px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
-.card h3 { margin: 0 0 10px; font-size: 15px; color: #334155; }
-button { background: #3b82f6; color: white; border: none; padding: 14px 24px; border-radius: 8px; font-size: 16px; cursor: pointer; width: 100%; font-weight: bold; }
-button:disabled { background: #94a3b8; }
-#log { margin-top: 12px; padding: 12px; background: #f1f5f9; border-radius: 8px; white-space: pre-wrap; font-size: 13px; line-height: 1.9; min-height: 60px; }
-.warn { background: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px; padding: 12px; margin-bottom: 16px; font-size: 14px; }
-pre { font-size: 12px; line-height: 1.8; color: #475569; margin: 0; }
+:root {
+  --teal:#4A9B8E; --teal-l:#6BB5A8; --teal-d:#357A6E; --teal-bg:#EAF5F3;
+  --salmon:#E8896A; --salmon-l:#F5B09A;
+  --cream:#FAFAF6; --white:#FFFFFF;
+  --tx:#2D3748; --tx-m:#4A5568; --tx-l:#718096;
+  --border:#E2E8F0; --border-l:#F1F5F9;
+  --sh-s:0 2px 8px rgba(74,155,142,.08);
+  --sh-m:0 4px 20px rgba(74,155,142,.12);
+  --sh-l:0 8px 40px rgba(74,155,142,.18);
+  --r:14px; --r-s:8px; --r-l:20px;
+  --f:'Noto Sans JP',sans-serif; --fd:'Zen Kaku Gothic New',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--f);background:var(--cream);color:var(--tx);min-height:100vh;font-size:15px;line-height:1.6}
+
+/* HEADER */
+#hdr{background:linear-gradient(135deg,var(--teal-d) 0%,var(--teal) 60%,var(--teal-l) 100%);color:#fff;padding:13px 18px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 12px rgba(53,122,110,.3);position:sticky;top:0;z-index:100}
+#hdr .hl{font-size:19px}
+#hdr h1{font-family:var(--fd);font-size:16px;font-weight:700;letter-spacing:.02em;flex:1}
+#hdr .sub{font-size:11px;opacity:.75;font-weight:300}
+#mode-btn{background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.3);border-radius:20px;padding:4px 12px;font-size:12px;cursor:pointer;transition:all .2s;color:#fff}
+#mode-btn:hover{background:rgba(255,255,255,.3)}
+
+/* SCREENS */
+.screen{display:none;min-height:calc(100vh - 54px)}
+.screen.active{display:block}
+#screen-role{display:none;align-items:center;justify-content:center;padding:32px 18px;background:linear-gradient(160deg,#EAF5F3 0%,#F9F5F0 100%)}
+#screen-role.active{display:flex}
+
+/* ROLE SELECT */
+.role-wrap{width:100%;max-width:460px;text-align:center}
+.role-hero{margin-bottom:32px}
+.role-hero .big{font-size:48px;margin-bottom:14px;display:block}
+.role-hero h2{font-family:var(--fd);font-size:22px;font-weight:700;color:var(--teal-d);margin-bottom:6px}
+.role-hero p{color:var(--tx-m);font-size:13px}
+.role-cards{display:flex;flex-direction:column;gap:14px}
+.role-card{background:#fff;border-radius:var(--r-l);padding:22px 20px;cursor:pointer;border:2px solid var(--border);transition:all .25s cubic-bezier(.34,1.56,.64,1);display:flex;align-items:center;gap:16px;text-align:left;box-shadow:var(--sh-s)}
+.role-card:hover{transform:translateY(-3px) scale(1.01);box-shadow:var(--sh-l)}
+.role-card.dc:hover{border-color:var(--teal)}
+.role-card.ab:hover{border-color:#8B5CF6}
+.role-card.ad:hover{border-color:var(--salmon)}
+.ri{font-size:32px;flex-shrink:0}
+.rt h3{font-family:var(--fd);font-size:16px;font-weight:700;margin-bottom:3px}
+.rt p{font-size:12px;color:var(--tx-l)}
+
+/* DOCTOR MODE */
+#screen-doctor{max-width:620px;margin:0 auto;padding:18px 14px 60px}
+.sec{background:#fff;border-radius:var(--r);padding:20px;margin-bottom:14px;border:1px solid var(--border);box-shadow:var(--sh-s)}
+.sec-t{font-family:var(--fd);font-size:15px;font-weight:700;color:var(--teal-d);margin-bottom:14px;display:flex;align-items:center;gap:7px}
+.doc-type-lbl{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--tx-l);margin-bottom:8px;margin-top:14px}
+.doc-type-lbl:first-child{margin-top:0}
+.doc-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.doc-btn{padding:13px 10px;border-radius:var(--r-s);border:2px solid var(--border);background:#fff;cursor:pointer;font-family:var(--f);font-size:14px;font-weight:500;color:var(--tx);transition:all .2s;text-align:center}
+.doc-btn:hover{border-color:var(--teal-l);background:var(--teal-bg)}
+.doc-btn.sel{border-color:var(--teal);background:var(--teal);color:#fff;box-shadow:0 2px 8px rgba(74,155,142,.35)}
+
+/* Month selector */
+.mon-sel{display:flex;align-items:center;gap:10px;justify-content:center}
+.mon-nav{width:42px;height:42px;border-radius:50%;border:2px solid var(--border);background:#fff;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;transition:all .2s}
+.mon-nav:hover{border-color:var(--teal);color:var(--teal)}
+.mon-disp{font-family:var(--fd);font-size:20px;font-weight:700;color:var(--teal-d);min-width:150px;text-align:center}
+
+/* AM/PM Calendar */
+.info-box{background:var(--teal-bg);border-left:4px solid var(--teal);border-radius:0 var(--r-s) var(--r-s) 0;padding:10px 14px;font-size:12px;color:var(--teal-d);margin-bottom:12px}
+.legend{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.leg-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tx-m)}
+.leg-c{width:14px;height:14px;border-radius:3px;flex-shrink:0}
+
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.cal-hdr{text-align:center;font-size:11px;font-weight:700;padding:5px 1px;color:var(--tx-l)}
+.cal-hdr.sat{color:#3B82F6}
+.cal-hdr.sun{color:#EF4444}
+
+.cal-day{border-radius:6px;border:1.5px solid var(--border);background:#fff;overflow:hidden;transition:all .15s;min-height:72px}
+.cal-day.empty{border-color:transparent;background:transparent}
+.cal-day.wk-sat{background:#EFF6FF;border-color:#BFDBFE}
+.cal-day.wk-sun,.cal-day.wk-hol{background:#FFF7ED;border-color:#FED7AA}
+.cal-day.disabled{opacity:.35;pointer-events:none}
+.cal-dn{text-align:center;font-size:12px;font-weight:600;padding:3px 0 2px;border-bottom:1px solid var(--border-l);line-height:1}
+.cal-dn.sat{color:#3B82F6}
+.cal-dn.sun,.cal-dn.hol{color:#EF4444}
+.ampm-row{display:flex;align-items:center;padding:2px 3px;cursor:pointer;gap:3px;min-height:22px;transition:background .15s;-webkit-tap-highlight-color:transparent}
+.ampm-row:hover{background:rgba(0,0,0,.04)}
+.ampm-lbl{font-size:9px;font-weight:700;letter-spacing:.03em;color:var(--tx-l);width:16px;flex-shrink:0}
+.ampm-val{flex:1;text-align:center;font-size:13px;font-weight:700;border-radius:3px;padding:1px 0;transition:all .2s}
+.ampm-val.pr{background:#DCFCE7;color:#15803D}
+.ampm-val.av{background:#FEF9C3;color:#854D0E}
+.ampm-val.un{background:#FEE2E2;color:#DC2626}
+.ampm-sep{height:1px;background:var(--border-l);margin:0 3px}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:7px;padding:13px 22px;border-radius:var(--r-s);border:none;cursor:pointer;font-family:var(--f);font-size:14px;font-weight:700;transition:all .2s;text-align:center;justify-content:center}
+.btn-p{background:var(--teal);color:#fff;box-shadow:0 2px 8px rgba(74,155,142,.3)}
+.btn-p:hover{background:var(--teal-d);transform:translateY(-1px)}
+.btn-s{background:#fff;color:var(--teal);border:2px solid var(--teal)}
+.btn-s:hover{background:var(--teal-bg)}
+.btn-d{background:#FEF2F2;color:#EF4444;border:2px solid #FCA5A5}
+.btn-d:hover{background:#FEE2E2}
+.btn-pu{background:#7C3AED;color:#fff}
+.btn-pu:hover{background:#6D28D9}
+.btn-sm{padding:8px 13px;font-size:12px}
+.btn-full{width:100%}
+
+/* Summary chips */
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:3px;padding:4px 9px;border-radius:20px;font-size:11px;font-weight:500}
+.chip-pr{background:#F0FDF4;color:#15803D;border:1px solid #86EFAC}
+.chip-g{background:#FEFCE8;color:#854D0E;border:1px solid #FDE047}
+.chip-r{background:#FEF2F2;color:#DC2626;border:1px solid #FCA5A5}
+
+/* Success */
+.success-wrap{text-align:center;padding:44px 20px}
+.success-wrap .si{font-size:60px;margin-bottom:18px;display:block;animation:bnc .6s ease}
+@keyframes bnc{0%,100%{transform:translateY(0)}40%{transform:translateY(-18px)}70%{transform:translateY(-7px)}}
+.success-wrap h2{font-family:var(--fd);font-size:20px;font-weight:700;color:var(--teal-d);margin-bottom:10px}
+.success-wrap p{color:var(--tx-m);margin-bottom:24px}
+
+/* ABSENCE SCREEN */
+#screen-absence{max-width:700px;margin:0 auto;padding:18px 14px 60px}
+.abs-tabs{display:flex;gap:0;background:#fff;border-radius:var(--r);overflow:hidden;border:1px solid var(--border);margin-bottom:16px}
+.abs-tab{flex:1;padding:13px;border:none;background:none;cursor:pointer;font-family:var(--f);font-size:13px;font-weight:500;color:var(--tx-l);transition:all .2s;border-bottom:3px solid transparent}
+.abs-tab:hover{background:var(--teal-bg);color:var(--teal)}
+.abs-tab.active{color:var(--teal);border-bottom-color:var(--teal);font-weight:700;background:var(--teal-bg)}
+
+/* Absence calendar view */
+.abs-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:16px}
+.abs-cal-hdr{text-align:center;font-size:10px;font-weight:700;padding:5px 1px;color:var(--tx-l)}
+.abs-cal-hdr.sat{color:#3B82F6}
+.abs-cal-hdr.sun{color:#EF4444}
+.abs-cal-cell{border-radius:6px;border:1px solid var(--border);background:#fff;padding:5px;min-height:60px}
+.abs-cal-cell.empty{border-color:transparent;background:transparent}
+.abs-cal-cell.sat{background:#EFF6FF}
+.abs-cal-cell.sun,.abs-cal-cell.hol{background:#FFF7ED}
+.abs-dn{font-size:11px;font-weight:700;margin-bottom:3px;text-align:center}
+.abs-entry{font-size:9px;padding:1px 3px;border-radius:3px;margin-bottom:2px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.abs-yukyuu{background:#FEF9C3;color:#92400E}
+.abs-gakkai{background:#DBEAFE;color:#1E40AF}
+.abs-shuccho{background:#D1FAE5;color:#065F46}
+.abs-other{background:#F3F4F6;color:#374151}
+
+/* Absence list */
+.abs-list-item{background:#fff;border-radius:var(--r-s);padding:13px 16px;border:1px solid var(--border);margin-bottom:8px;display:flex;align-items:center;gap:12px}
+.abs-reason-badge{padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700}
+.abs-info{flex:1}
+.abs-date{font-weight:700;font-size:14px}
+.abs-detail{font-size:12px;color:var(--tx-l)}
+
+/* PIN */
+.pin-wrap{background:#fff;border-radius:var(--r-l);padding:30px 26px;width:100%;max-width:300px;margin:50px auto;box-shadow:var(--sh-l);text-align:center}
+.pin-wrap h3{font-family:var(--fd);font-size:17px;font-weight:700;color:var(--tx);margin-bottom:7px}
+.pin-wrap p{color:var(--tx-l);font-size:12px;margin-bottom:22px}
+.pin-dots{display:flex;justify-content:center;gap:10px;margin-bottom:18px}
+.pin-dot{width:13px;height:13px;border-radius:50%;background:var(--border);transition:background .2s}
+.pin-dot.on{background:var(--teal)}
+.pin-kp{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.pk{padding:15px;border-radius:var(--r-s);border:2px solid var(--border);background:#fff;cursor:pointer;font-family:var(--f);font-size:19px;font-weight:500;transition:all .15s}
+.pk:hover{background:var(--teal-bg);border-color:var(--teal)}
+.pk:active{transform:scale(.94)}
+.pk.del{font-size:14px;color:var(--tx-l)}
+.pin-err{color:#EF4444;font-size:12px;margin-top:8px}
+
+/* ADMIN */
+#screen-admin{display:none}
+#screen-admin.active{display:block}
+.adm-tabs{background:#fff;border-bottom:1px solid var(--border);display:flex;gap:0;overflow-x:auto;position:sticky;top:54px;z-index:90;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+.adm-tab{padding:13px 16px;border:none;background:none;cursor:pointer;font-family:var(--f);font-size:12px;font-weight:500;color:var(--tx-l);border-bottom:3px solid transparent;transition:all .2s;white-space:nowrap;display:flex;align-items:center;gap:5px}
+.adm-tab:hover{color:var(--teal);background:var(--teal-bg)}
+.adm-tab.active{color:var(--teal);border-bottom-color:var(--teal);font-weight:700}
+.adm-body{padding:20px 18px 60px;max-width:920px;margin:0 auto}
+.adm-panel{display:none}
+.adm-panel.active{display:block}
+.pg-hdr{margin-bottom:20px}
+.pg-hdr h2{font-family:var(--fd);font-size:19px;font-weight:700;margin-bottom:3px}
+.pg-hdr p{color:var(--tx-l);font-size:12px}
+
+/* Doctor cards admin */
+.dc-card{background:#fff;border-radius:var(--r);padding:14px 16px;margin-bottom:10px;border:1px solid var(--border);display:flex;align-items:center;gap:12px;box-shadow:var(--sh-s);transition:box-shadow .2s,opacity .2s}
+.dc-card[draggable]{cursor:grab}
+.dc-card[draggable]:active{cursor:grabbing}
+.dc-card.drag-over{border:2px dashed var(--teal);background:var(--teal-bg)}
+.dc-card.dragging{opacity:.4;box-shadow:none}
+.drag-handle{font-size:18px;color:var(--tx-l);cursor:grab;flex-shrink:0;padding:0 2px;user-select:none}
+.drag-handle:hover{color:var(--teal)}
+.dc-av{width:42px;height:42px;border-radius:50%;background:var(--teal-bg);color:var(--teal);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex-shrink:0}
+.dc-info{flex:1}
+.dc-name{font-weight:700;font-size:14px;margin-bottom:2px}
+.dc-contact{font-size:11px;color:var(--tx-l)}
+.badge{padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.03em;flex-shrink:0}
+.badge-sn{background:#EFF6FF;color:#2563EB;border:1px solid #BFDBFE}
+.badge-hn{background:#F0FDF4;color:#16A34A;border:1px solid #BBF7D0}
+.dc-acts{display:flex;gap:5px;flex-shrink:0}
+.ib{width:32px;height:32px;border-radius:var(--r-s);border:1px solid var(--border);background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;transition:all .2s}
+.ib:hover{background:var(--teal-bg);border-color:var(--teal)}
+.ib.dng:hover{background:#FEF2F2;border-color:#FCA5A5}
+
+/* Modal */
+.modal-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;align-items:center;justify-content:center;padding:18px}
+.modal-ov.open{display:flex}
+.modal{background:#fff;border-radius:var(--r-l);padding:26px;width:100%;max-width:420px;box-shadow:var(--sh-l);animation:su .22s ease}
+@keyframes su{from{transform:translateY(18px);opacity:0}to{transform:translateY(0);opacity:1}}
+.modal h3{font-family:var(--fd);font-size:17px;font-weight:700;margin-bottom:18px}
+.fg{margin-bottom:12px}
+.fl{display:block;font-size:11px;font-weight:700;color:var(--tx-m);margin-bottom:5px;letter-spacing:.03em}
+.fi{width:100%;padding:9px 12px;border-radius:var(--r-s);border:2px solid var(--border);font-family:var(--f);font-size:13px;color:var(--tx);transition:border-color .2s;background:#fff}
+.fi:focus{outline:none;border-color:var(--teal)}
+.fr{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.m-acts{display:flex;gap:8px;margin-top:18px}
+
+/* Month row */
+.mon-row{display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap}
+.mon-row select{padding:7px 12px;border-radius:var(--r-s);border:2px solid var(--border);font-family:var(--f);font-size:13px;background:#fff;cursor:pointer}
+.mon-row select:focus{outline:none;border-color:var(--teal)}
+
+/* Response matrix */
+.rm{width:100%;border-collapse:collapse;font-size:11px}
+.rm th,.rm td{padding:5px 4px;text-align:center;border:1px solid var(--border)}
+.rm th{background:var(--teal-bg);color:var(--teal-d);font-weight:700;font-size:10px}
+.rm td.nm{text-align:left;padding:5px 8px;font-weight:500;white-space:nowrap}
+.rm-av{background:#DCFCE7;color:#16A34A;font-weight:700}
+.rm-un{background:#FEE2E2;color:#DC2626;font-weight:700}
+.rm-hf{background:#FEF3C7;color:#92400E;font-weight:700}
+.rm-sat{background:#EFF6FF}
+.rm-sun{background:#FFF7ED}
+.rm-dis{background:#F8F8F8;color:#CBD5E0}
+
+/* Assign calendar */
+.asgn-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-bottom:16px}
+.asgn-hdr{border-radius:var(--r-s);text-align:center;font-size:11px;font-weight:700;padding:6px;color:#fff;background:var(--tx)}
+.asgn-hdr.sat{background:#2563EB}
+.asgn-hdr.sun{background:#DC2626}
+.asgn-cell{border-radius:var(--r-s);border:1px solid var(--border);background:#fff;padding:5px;min-height:60px}
+.asgn-cell.sat{background:#EFF6FF;border-color:#BFDBFE}
+.asgn-cell.sun,.asgn-cell.hol{background:#FFF7ED;border-color:#FED7AA}
+.asgn-cell.empty{background:transparent;border-color:transparent}
+.ac-d{font-size:10px;font-weight:700;margin-bottom:4px;color:var(--tx-m)}
+.asgn-cell.asgn-warn{background:#FEE2E2 !important;border-color:#EF4444 !important;border-width:2px}
+.asgn-cell select{width:100%;font-size:10px;padding:2px;border-radius:4px;border:1px solid var(--border);font-family:var(--f);background:#fff;cursor:pointer}
+
+/* Shift target table */
+.st-table{width:100%;border-collapse:collapse}
+.st-table th,.st-table td{padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px}
+.st-table th{background:var(--teal-bg);color:var(--teal-d);font-weight:700;font-size:11px;text-align:left}
+.st-input{width:64px;padding:5px 8px;border-radius:var(--r-s);border:2px solid var(--border);font-family:var(--f);font-size:14px;text-align:center}
+.st-input:focus{outline:none;border-color:var(--teal)}
+.st-remain{font-size:12px;color:var(--tx-l)}
+.st-remain.ov{color:#EF4444;font-weight:700}
+
+/* Count */
+.cnt-table{width:100%;border-collapse:collapse;font-size:13px}
+.cnt-table th,.cnt-table td{padding:9px 12px;text-align:center;border-bottom:1px solid var(--border)}
+.cnt-table th{background:var(--teal-bg);color:var(--teal-d);font-weight:700;font-size:11px}
+.cnt-table td:first-child{text-align:left;font-weight:500}
+.cnt-bar{display:flex;align-items:center;gap:7px}
+.cnt-fill{height:8px;border-radius:4px;background:var(--teal);transition:width .4s ease}
+
+/* Print calendar */
+.pr-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.pr-hdr{text-align:center;font-size:10px;font-weight:700;padding:5px}
+.pr-hdr.sat{color:#2563EB}
+.pr-hdr.sun{color:#DC2626}
+.pr-cell{border:1px solid var(--border);padding:6px;min-height:64px;border-radius:5px;background:#fff}
+.pr-cell.sat{background:#EFF6FF}
+.pr-cell.sun,.pr-cell.hol{background:#FFF7ED}
+.pr-cell.empty{background:transparent;border-color:transparent}
+.pr-dn{font-size:12px;font-weight:700;margin-bottom:4px}
+.pr-dr{font-size:11px;color:var(--teal-d);font-weight:500}
+
+/* Email */
+.email-box{background:#F8FAFC;border:1px solid var(--border);border-radius:var(--r);padding:14px;font-size:12px;line-height:1.8;white-space:pre-wrap;color:var(--tx);font-family:monospace}
+
+/* Status badges */
+.sb{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700}
+.sb-ok{background:#F0FDF4;color:#16A34A}
+.sb-ng{background:#FFF7ED;color:#D97706}
+.sb-no{background:#F1F5F9;color:#94A3B8}
+
+@media(max-width:480px){.fr{grid-template-columns:1fr}.doc-grid{grid-template-columns:1fr}.adm-tab{padding:11px 10px;font-size:11px}}
+@media print{#hdr,.adm-tabs,.no-print{display:none!important}body{background:#fff}.sec{box-shadow:none;border:1px solid #ddd}}
 </style>
 </head>
 <body>
-<h2>🔧 2026年4月 データ復元ツール</h2>
-<div class="warn">
-⚠️ <strong>復元できるデータ</strong><br>
-✅ 当番表（割り振り）：Excelの画像から復元<br>
-✅ 不在情報：Excelの画像から復元<br>
-❌ 各医師の◎○×入力：復元不可
+<div id="fb-loading" style="position:fixed;inset:0;background:rgba(255,255,255,.95);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px">
+  <div style="font-size:48px">🔥</div>
+  <div style="font-size:16px;font-weight:700;color:#4A9B8E">データを読み込んでいます...</div>
+  <div style="font-size:13px;color:#888">Firebase に接続中</div>
 </div>
 
-<div class="card">
-  <h3>📅 当番表（2026年4月）</h3>
-  <pre id="prev-assign"></pre>
-</div>
-<div class="card">
-  <h3>🏥 不在情報（2026年4月）</h3>
-  <pre id="prev-abs"></pre>
+<div id="hdr">
+  <span class="hl">🏥</span>
+  <div style="flex:1">
+    <h1>先端医療開発科</h1>
+    <div class="sub">オンコール管理システム</div>
+  </div>
+  <div id="mode-btn" onclick="goHome()">🏠 ホーム</div>
 </div>
 
-<button onclick="restore()" id="btn">▶ 復元を実行する</button>
-<div id="log">ボタンを押すと復元を開始します</div>
+<!-- ══ ROLE SELECT ══ -->
+<div id="screen-role" class="screen active">
+  <div class="role-wrap">
+    <div class="role-hero">
+      <span class="big">📋</span>
+      <h2>オンコール管理システム</h2>
+      <p>先端医療開発科 夜間・休日オンコール当番表</p>
+    </div>
+    <div class="role-cards">
+      <div class="role-card dc" onclick="enterDoctorMode()">
+        <span class="ri">👨‍⚕️</span>
+        <div class="rt"><h3>スケジュールを入力する</h3><p>担当可能日を○/×で入力してください</p></div>
+      </div>
+      <div class="role-card ab" onclick="enterAbsenceMode()">
+        <span class="ri">📅</span>
+        <div class="rt"><h3>不在情報を確認・入力する</h3><p>有休・学会・出張などの不在情報</p></div>
+      </div>
+      <div class="role-card ad" onclick="enterAdminMode()">
+        <span class="ri">🔑</span>
+        <div class="rt"><h3>管理者メニュー</h3><p>割り振り・集計・エクスポート</p></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ DOCTOR MODE ══ -->
+<div id="screen-doctor" class="screen">
+  <!-- Step A: Name select -->
+  <div id="ds-name" style="display:block">
+    <div class="sec">
+      <div class="sec-t">👤 お名前を選択してください</div>
+      <div id="doc-name-list"></div>
+    </div>
+  </div>
+
+  <!-- Step B: Month + Calendar (shown after name selected) -->
+  <div id="ds-cal" style="display:none">
+    <div class="sec">
+      <div class="sec-t">📅 対象月を選択</div>
+      <div class="mon-sel">
+        <button class="mon-nav" onclick="changeDocMonth(-1)">‹</button>
+        <div class="mon-disp" id="doc-mon-disp"></div>
+        <button class="mon-nav" onclick="changeDocMonth(1)">›</button>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-t">🗓️ スケジュール入力</div>
+      <div class="info-box">各日をタップして オンコール（◎：希望日（当直）、○：希望日、×：不可）を設定してください。◎○を優先し、空欄も含めてシフトを割り振ります。</div>
+      <div class="legend">
+        <div class="leg-item"><div class="leg-c" style="background:#DCFCE7;border:1px solid #86EFAC"></div>◎ 希望日（当直）</div>
+        <div class="leg-item"><div class="leg-c" style="background:#FEF9C3;border:1px solid #FDE047"></div>○ 希望日</div>
+        <div class="leg-item"><div class="leg-c" style="background:#FEE2E2;border:1px solid #FCA5A5"></div>× 不可</div>
+        <div class="leg-item"><div class="leg-c" style="background:#fff;border:1px solid #E2E8F0"></div>空欄 = 割り振りOK</div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+        <span style="font-size:12px;color:#64748b;align-self:center;margin-right:2px">一括設定：</span>
+        <button class="btn btn-sm" style="background:#FEE2E2;border:1px solid #FCA5A5;color:#991b1b;font-size:13px" onclick="bulkSetSchedule('unavailable')">× 全日不可</button>
+        <button class="btn btn-sm" style="background:#f1f5f9;border:1px solid #cbd5e1;color:#475569;font-size:13px" onclick="bulkSetSchedule('')">空欄 全日クリア</button>
+      </div>
+      <div class="cal-grid" id="doc-calendar"></div>
+    </div>
+
+    <div class="sec" id="doc-summary-sec" style="display:none">
+      <div class="sec-t">✅ 入力サマリー</div>
+      <div id="doc-summary"></div>
+    </div>
+
+    <div class="sec" id="ds-assigned-cal"></div>
+
+    <div style="display:flex;gap:8px;padding:0 2px;margin-bottom:10px">
+      <button class="btn btn-s btn-sm" onclick="resetDoctorMode()">← 名前を変更</button>
+      <button class="btn btn-p" style="flex:1" onclick="submitSchedule()">📨 送信する</button>
+    </div>
+  </div>
+
+  <!-- Success -->
+  <div id="ds-done" style="display:none">
+    <div class="sec">
+      <div class="success-wrap">
+        <span class="si">🎉</span>
+        <h2>送信しました！</h2>
+        <p>スケジュールを受け付けました。<br>ご協力ありがとうございました。</p>
+        <button class="btn btn-p btn-full" onclick="resetDoctorMode()">🔄 別の月を入力する</button>
+        <div style="margin-top:10px"><button class="btn btn-s btn-full" onclick="goHome()">🏠 ホームへ戻る</button></div>
+      </div>
+    </div>
+    <div class="sec" id="ds-assigned-done"></div>
+  </div>
+</div>
+
+<!-- ══ ABSENCE SCREEN ══ -->
+<div id="screen-absence" class="screen">
+  <div style="padding:16px 14px 80px;max-width:700px;margin:0 auto">
+
+    <!-- 医師選択 -->
+    <div class="sec">
+      <div class="sec-t">👤 専任医師を選択</div>
+      <div id="abs-doc-list"></div>
+    </div>
+
+    <!-- カレンダー（医師選択後に表示） -->
+    <div id="abs-cal-wrap" style="display:none">
+      <div class="sec">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+          <div class="sec-t" style="margin-bottom:0">📅 <span id="abs-cal-title">不在カレンダー</span></div>
+          <button class="btn btn-s btn-sm" onclick="toggleAbsOverview()" id="abs-overview-toggle-btn">👥 全員の不在状況を確認</button>
+        </div>
+        <div class="mon-row">
+          <button class="mon-nav" onclick="changeAbsMonth(-1)">‹</button>
+          <div class="mon-disp" id="abs-mon-disp" style="font-size:17px;min-width:130px"></div>
+          <button class="mon-nav" onclick="changeAbsMonth(1)">›</button>
+        </div>
+        <div class="info-box" style="margin-bottom:10px">日付をタップして不在を追加・削除できます。土日祝は全日、平日はAM/PMを選べます。</div>
+        <!-- 凡例 -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <span class="leg-item"><div class="abs-entry abs-yukyuu" style="padding:2px 7px;border-radius:3px;font-size:11px">有休</div></span>
+          <span class="leg-item"><div class="abs-entry abs-gakkai" style="padding:2px 7px;border-radius:3px;font-size:11px">学会</div></span>
+          <span class="leg-item"><div class="abs-entry abs-shuccho" style="padding:2px 7px;border-radius:3px;font-size:11px">出張</div></span>
+          <span class="leg-item"><div class="abs-entry abs-other" style="padding:2px 7px;border-radius:3px;font-size:11px">その他</div></span>
+        </div>
+        <div class="abs-cal-grid" id="abs-cal-interactive"></div>
+      </div>
+
+      <!-- 全員確認インライン（ボタンで開閉） -->
+      <div id="abs-inline-overview" style="display:none">
+        <div class="sec">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <div class="sec-t" style="margin-bottom:0">👥 全員の不在状況</div>
+            <button class="btn btn-s btn-sm" onclick="toggleAbsOverview()">✕ 閉じる</button>
+          </div>
+          <div class="abs-cal-grid" id="abs-cal-overview-inline"></div>
+        </div>
+        <div class="sec">
+          <div class="sec-t">📋 不在一覧（専任医師）</div>
+          <div id="abs-list-overview-inline"></div>
+        </div>
+      </div>
+
+      <!-- 当月不在一覧 -->
+      <div class="sec" id="abs-my-list-sec">
+        <div class="sec-t">🗑️ 登録済みの不在（自分）</div>
+        <div id="abs-my-entries"></div>
+      </div>
+    </div>
+
+    <!-- 全員確認ビュー（医師未選択時） -->
+    <div id="abs-overview-wrap">
+      <div class="sec">
+        <div class="sec-t">📋 全員の不在状況</div>
+        <div class="mon-row">
+          <select id="abs-v-year" onchange="renderAbsOverview()"></select>
+          <select id="abs-v-month" onchange="renderAbsOverview()"></select>
+        </div>
+        <div class="abs-cal-grid" id="abs-cal-view"></div>
+      </div>
+      <div class="sec">
+        <div class="sec-t">📋 不在一覧（専任医師）</div>
+        <div id="abs-list-view"></div>
+      </div>
+    </div>
+
+    <button class="btn btn-s btn-full" onclick="goHome()">🏠 ホームへ戻る</button>
+  </div>
+</div>
+
+<!-- ══ ABSENCE DAY MODAL ══ -->
+<div class="modal-ov" id="abs-day-modal">
+  <div class="modal" style="max-width:360px">
+    <h3 id="abs-day-title">不在を追加</h3>
+    <div class="fg">
+      <label class="fl">時間帯</label>
+      <select class="fi" id="abs-day-period">
+        <option value="全日">全日</option>
+        <option value="AM">午前（AM）</option>
+        <option value="PM">午後（PM）</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label class="fl">理由</label>
+      <select class="fi" id="abs-day-reason">
+        <option value="出張">出張</option>
+        <option value="学会">学会</option>
+        <option value="有休">有休</option>
+        <option value="その他">その他</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label class="fl">備考（任意）</label>
+      <input class="fi" id="abs-day-note" placeholder="例：○○学会参加">
+    </div>
+    <!-- Existing entries for this day -->
+    <div id="abs-day-existing" style="margin-bottom:10px"></div>
+    <div class="m-acts">
+      <button class="btn btn-s" style="flex:1" onclick="closeModal('abs-day-modal')">閉じる</button>
+      <button class="btn btn-p" style="flex:1" onclick="addAbsFromModal()">追加する</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ADMIN PIN ══ -->
+<div id="screen-pin" class="screen">
+  <div class="pin-wrap">
+    <h3>🔑 管理者認証</h3>
+    <p>4桁のPINコードを入力してください</p>
+    <div class="pin-dots">
+      <div class="pin-dot" id="pd0"></div><div class="pin-dot" id="pd1"></div>
+      <div class="pin-dot" id="pd2"></div><div class="pin-dot" id="pd3"></div>
+    </div>
+    <div class="pin-kp">
+      <button class="pk" onclick="pinIn('1')">1</button><button class="pk" onclick="pinIn('2')">2</button><button class="pk" onclick="pinIn('3')">3</button>
+      <button class="pk" onclick="pinIn('4')">4</button><button class="pk" onclick="pinIn('5')">5</button><button class="pk" onclick="pinIn('6')">6</button>
+      <button class="pk" onclick="pinIn('7')">7</button><button class="pk" onclick="pinIn('8')">8</button><button class="pk" onclick="pinIn('9')">9</button>
+      <button class="pk" onclick="goHome()">✕</button><button class="pk" onclick="pinIn('0')">0</button><button class="pk del" onclick="pinDel()">⌫</button>
+    </div>
+    <div id="pin-err" class="pin-err"></div>
+  </div>
+</div>
+
+<!-- ══ ADMIN ══ -->
+<div id="screen-admin" class="screen">
+  <div class="adm-tabs">
+    <button class="adm-tab active" id="btn-t1" data-tab="t1" onclick="showAdmTab('t1')">👨‍⚕️ 医師管理</button>
+    <button class="adm-tab" id="btn-t2" data-tab="t2" onclick="showAdmTab('t2')">📊 回答確認</button>
+    <button class="adm-tab" id="btn-t3" data-tab="t3" onclick="showAdmTab('t3')">🔀 割り振り</button>
+    <button class="adm-tab" id="btn-t4" data-tab="t4" onclick="showAdmTab('t4')">📅 当番表</button>
+    <button class="adm-tab" id="btn-t5" data-tab="t5" onclick="showAdmTab('t5')">📥 出力</button>
+    <button class="adm-tab" id="btn-t6" data-tab="t6" onclick="showAdmTab('t6')">📈 統計</button>
+  </div>
+  <div class="adm-body">
+
+    <!-- T1: Doctor management -->
+    <div id="t1" class="adm-panel active">
+      <div class="pg-hdr"><h2>医師管理</h2><p>医師の追加・編集・削除ができます</p></div>
+      <button class="btn btn-p no-print" style="margin-bottom:16px" onclick="openDcModal()">＋ 医師を追加する</button>
+      <div id="adm-dc-list"></div>
+    </div>
+
+    <!-- T2: Responses -->
+    <div id="t2" class="adm-panel">
+      <div class="pg-hdr"><h2>回答状況の確認</h2><p>各医師の入力内容を確認・編集できます</p></div>
+      <div class="mon-row">
+        <select id="r-year" onchange="renderResTab()"></select>
+        <select id="r-month" onchange="renderResTab()"></select>
+        <button class="btn btn-s btn-sm" onclick="renderResTab()">🔄 更新</button>
+        <button class="btn btn-s btn-sm" onclick="genEmail()">✉️ 依頼メール生成</button>
+      </div>
+      <div id="res-status"></div>
+      <div style="overflow-x:auto;margin-top:16px"><div id="res-matrix"></div></div>
+    </div>
+
+    <!-- T3: Assign -->
+    <div id="t3" class="adm-panel">
+      <div class="pg-hdr"><h2>自動割り振り</h2><p>シフト目標回数を設定して自動割り振りを実行します</p></div>
+      <div class="mon-row">
+        <select id="a-year" onchange="renderAssignTab()"></select>
+        <select id="a-month" onchange="renderAssignTab()"></select>
+        <button class="btn btn-p" onclick="runAutoAssign()">⚡ 自動割り振り実行</button>
+        <button class="btn btn-s btn-sm" onclick="confirmAssignment()">✅ 確定して保存</button>
+        <button class="btn btn-d btn-sm" id="reset-assign-btn" onclick="resetAssignment()">🔄 割り振りリセット</button>
+      </div>
+
+      <!-- Shift targets -->
+      <div class="sec" style="margin-bottom:16px">
+        <div class="sec-t">🎯 シフト目標回数（当月）</div>
+        <div style="font-size:12px;color:var(--tx-l);margin-bottom:12px">目標回数の合計が当月日数と一致するように設定してください。基本的に目標回数通りに割り振ります（×以外かつ候補がいない場合のみ ±2 の範囲で調整）。</div>
+        <table class="st-table">
+          <thead><tr><th>医師名</th><th>種別</th><th>目標回数</th><th>割当済</th><th>残り</th></tr></thead>
+          <tbody id="shift-target-tbody"></tbody>
+          <tfoot id="shift-target-tfoot"></tfoot>
+        </table>
+        <div style="margin-top:10px;display:flex;gap:8px">
+          <button class="btn btn-s btn-sm" onclick="saveShiftTargets()">💾 目標を保存</button>
+          <button class="btn btn-s btn-sm" onclick="copyLastMonthTargets()">📋 先月の設定をコピー</button>
+        </div>
+      </div>
+
+      <div id="assign-area"></div>
+    </div>
+
+    <!-- T4: Calendar -->
+    <div id="t4" class="adm-panel">
+      <div class="pg-hdr"><h2>当番表カレンダー</h2><p>最終確認・印刷はこちらから</p></div>
+      <div class="mon-row no-print">
+        <select id="c-year" onchange="renderCalTab()"></select>
+        <select id="c-month" onchange="renderCalTab()"></select>
+        <button class="btn btn-s btn-sm" onclick="window.print()">🖨️ 印刷</button>
+      </div>
+      <div id="cal-view"></div>
+    </div>
+
+    <!-- T5: Export -->
+    <div id="t5" class="adm-panel">
+      <div class="pg-hdr"><h2>Excelエクスポート</h2><p>IT推進課提出用のExcelファイルを出力します</p></div>
+      <div class="sec">
+        <div class="sec-t">📥 当番表ダウンロード</div>
+        <div class="mon-row" style="margin-bottom:16px">
+          <select id="e-year"></select><select id="e-month"></select>
+        </div>
+        <div class="info-box">テンプレートのCDEF列（不在医師①②）とL列（夜間オンコール）に貼り付けられる形式で出力します。1日2行の構成です。</div>
+        <button class="btn btn-p" onclick="exportExcel()">📊 Excelダウンロード</button>
+      </div>
+      <div class="sec" style="margin-top:14px">
+        <div class="sec-t">🔑 管理者設定</div>
+        <div class="fg">
+          <label class="fl">PINコードを変更</label>
+          <div style="display:flex;gap:8px">
+            <input class="fi" id="new-pin" type="password" maxlength="4" placeholder="新しい4桁PIN" style="width:140px">
+            <button class="btn btn-s btn-sm" onclick="changePin()">変更</button>
+          </div>
+        </div>
+        <div class="fg" style="margin-top:14px">
+          <label class="fl">年度データのリセット（4月〜3月）</label>
+          <button id="reset-year-btn" class="btn btn-d btn-sm" onclick="resetYearData()">⚠️ 年度データをリセット</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- T6: Stats -->
+    <div id="t6" class="adm-panel">
+      <div class="pg-hdr"><h2>担当回数・統計</h2><p>年度（4月〜3月）のオンコール担当回数を集計します</p></div>
+      <div class="mon-row">
+        <select id="st-year" onchange="renderStatsTab()"></select>
+        <label style="font-size:13px;color:var(--tx-m)">年度</label>
+      </div>
+      <div id="stats-area"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══ MODALS ══ -->
+<!-- Doctor modal -->
+<div class="modal-ov" id="dc-modal">
+  <div class="modal">
+    <h3 id="dc-modal-title">医師を追加</h3>
+    <div class="fg"><label class="fl">氏名</label><input class="fi" id="f-name" placeholder="例：大本 晃弘"></div>
+    <div class="fr">
+      <div class="fg"><label class="fl">PHS番号</label><input class="fi" id="f-phs" placeholder="例：8087"></div>
+      <div class="fg"><label class="fl">携帯番号</label><input class="fi" id="f-mob" placeholder="例：090-3544-8384"></div>
+    </div>
+    <div class="fg">
+      <label class="fl">種別</label>
+      <select class="fi" id="f-type"><option value="senin">専任</option><option value="henim">併任</option></select>
+    </div>
+    <div class="m-acts">
+      <button class="btn btn-s" style="flex:1" onclick="closeModal('dc-modal')">キャンセル</button>
+      <button class="btn btn-p" style="flex:1" onclick="saveDoctor()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Email modal -->
+<div class="modal-ov" id="email-modal">
+  <div class="modal" style="max-width:500px">
+    <h3>✉️ 依頼メール文面</h3>
+    <div class="fr" style="margin-bottom:12px">
+      <div class="fg"><label class="fl">対象月</label><input class="fi" id="em-target" placeholder="例：3月"></div>
+      <div class="fg"><label class="fl">締め切り日</label><input class="fi" id="em-dl" placeholder="例：2月15日（土）"></div>
+    </div>
+    <button class="btn btn-s btn-sm" style="margin-bottom:8px" onclick="updateEmailPreview()">🔄 更新</button>
+    <div class="email-box" id="em-preview"></div>
+    <div class="m-acts">
+      <button class="btn btn-s" style="flex:1" onclick="closeModal('email-modal')">閉じる</button>
+      <button class="btn btn-p" style="flex:1" onclick="copyEmail()">📋 コピー</button>
+    </div>
+  </div>
+</div>
 
 <script>
+// ══════════════════════════════════════════════════
+//  DATA MODEL
+// ══════════════════════════════════════════════════
+const SK = 'oncall_v16'; // Firestore doc ID (互換性のため維持)
+
+const DEFAULT_DOCTORS = [
+  { id:'d0', name:'北野滋久',   phs:'8080', mobile:'', type:'senin', order:1 },
+  { id:'d1', name:'古川孝広',   phs:'7452', mobile:'', type:'senin', order:2 },
+  { id:'d2', name:'宮脇英里子', phs:'7618', mobile:'', type:'senin', order:3 },
+  { id:'d3', name:'大本晃弘',   phs:'8087', mobile:'', type:'senin', order:4 },
+  { id:'d8', name:'竹村弘司',   phs:'1111', mobile:'', type:'senin', order:5 },
+  { id:'d9', name:'大岩修太郎', phs:'',     mobile:'', type:'senin', order:6 },
+  { id:'d4', name:'尾崎由記範', phs:'5555', mobile:'', type:'henim', order:7 },
+  { id:'d5', name:'福岡聖大',   phs:'7150', mobile:'', type:'henim', order:8 },
+  { id:'d6', name:'増田淳',     phs:'8086', mobile:'', type:'henim', order:9 },
+  { id:'d7', name:'仲尾岳大',   phs:'7778', mobile:'', type:'henim', order:10 },
+];
+
+// ══ Firebase 初期化 ══
 const firebaseConfig = {
   apiKey: "AIzaSyB8H2zwkrZquw9qvNxDxKobqMRyLJp13qo",
   authDomain: "amd-oncall-system.firebaseapp.com",
@@ -48,102 +703,1694 @@ const firebaseConfig = {
   appId: "1:515760380634:web:b3dba864a1f8ccf388a3e3"
 };
 firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
-const DOC_REF = db.collection('oncall').doc('main');
+const db_fs = firebase.firestore();
+const DOC_REF = db_fs.collection('oncall').doc('main');
 
-const names = {
-  d0:"北野滋久", d1:"古川孝広", d2:"宮脇英里子", d3:"大本晃弘",
-  d4:"尾崎由記範", d5:"福岡聖大", d6:"増田淳", d7:"仲尾岳大",
-  d8:"竹村弘司", d9:"大岩修太郎"
-};
+// セーブ中フラグ（競合防止）
+let saveTimer = null;
 
-// ── 当番表 ──────────────────────────────
-const assignments_2026_04 = {
-  "2026-04-01":"d3","2026-04-02":"d9","2026-04-03":"d8","2026-04-04":"d9",
-  "2026-04-05":"d3","2026-04-06":"d2","2026-04-07":"d3","2026-04-08":"d7",
-  "2026-04-09":"d3","2026-04-10":"d6","2026-04-11":"d2","2026-04-12":"d8",
-  "2026-04-13":"d7","2026-04-14":"d8","2026-04-15":"d9","2026-04-16":"d4",
-  "2026-04-17":"d7","2026-04-18":"d9","2026-04-19":"d2","2026-04-20":"d8",
-  "2026-04-21":"d9","2026-04-22":"d7","2026-04-23":"d9","2026-04-24":"d7",
-  "2026-04-25":"d8","2026-04-26":"d5","2026-04-27":"d2","2026-04-28":"d8",
-  "2026-04-29":"d8","2026-04-30":"d9"
-};
+function buildFreshDB() {
+  return {
+    pin: '1234',
+    doctors: JSON.parse(JSON.stringify(DEFAULT_DOCTORS)),
+    schedules: {},
+    assignments: {},
+    shiftTargets: {},
+    absences: [],
+    cumulative: {}
+  };
+}
 
-// ── 不在情報（Excelから読み取り）────────────────
-// 古川孝広(d1): 4/4, 4/11, 4/18, 4/25, 4/29 全日
-// 宮脇英里子(d2): 4/9 全日
-// 大本晃弘(d3): 4/13, 4/14, 4/15, 4/16 全日
-const absences_2026_04 = [
-  { id:"abs-2604-01", doctorId:"d1", date:"2026-04-04", period:"全日", reason:"その他", note:"" },
-  { id:"abs-2604-02", doctorId:"d2", date:"2026-04-09", period:"全日", reason:"その他", note:"" },
-  { id:"abs-2604-03", doctorId:"d1", date:"2026-04-11", period:"全日", reason:"その他", note:"" },
-  { id:"abs-2604-04", doctorId:"d3", date:"2026-04-13", period:"全日", reason:"その他", note:"" },
-  { id:"abs-2604-05", doctorId:"d3", date:"2026-04-14", period:"全日", reason:"その他", note:"" },
-  { id:"abs-2604-06", doctorId:"d3", date:"2026-04-15", period:"全日", reason:"その他", note:"" },
-  { id:"abs-2604-07", doctorId:"d3", date:"2026-04-16", period:"全日", reason:"その他", note:"" },
-  { id:"abs-2604-08", doctorId:"d1", date:"2026-04-18", period:"全日", reason:"その他", note:"" },
-  { id:"abs-2604-09", doctorId:"d1", date:"2026-04-25", period:"全日", reason:"その他", note:"" },
-  { id:"abs-2604-10", doctorId:"d1", date:"2026-04-29", period:"全日", reason:"その他", note:"" },
-];
+function mergeWithDefaults(data) {
+  if (!data.doctors) data.doctors = [];
+  DEFAULT_DOCTORS.forEach(def => {
+    if (!data.doctors.find(d => d.id === def.id)) {
+      data.doctors.push(JSON.parse(JSON.stringify(def)));
+    }
+  });
+  data.doctors.sort((a,b) => a.order - b.order);
+  if (!data.schedules)    data.schedules = {};
+  if (!data.assignments)  data.assignments = {};
+  if (!data.shiftTargets) data.shiftTargets = {};
+  if (!data.absences)     data.absences = [];
+  if (!data.cumulative)   data.cumulative = {};
+  if (!data.pin)          data.pin = '1234';
+  return data;
+}
 
-// プレビュー表示
-const wdays = ['日','月','火','水','木','金','土'];
-let pa = '';
-Object.entries(assignments_2026_04).forEach(([date, id]) => {
-  const dw = wdays[new Date(date+'T00:00:00').getDay()];
-  pa += `${date}（${dw}）: ${names[id]}\n`;
-});
-document.getElementById('prev-assign').textContent = pa;
+// ══ Firestore 保存関数 ══
+// 特定フィールドのみ更新（他のユーザーのデータを上書きしない）
 
-let pb = '';
-absences_2026_04.forEach(a => {
-  const dw = wdays[new Date(a.date+'T00:00:00').getDay()];
-  pb += `${a.date}（${dw}）: ${names[a.doctorId]} ${a.period} ${a.reason}\n`;
-});
-document.getElementById('prev-abs').textContent = pb;
+function saveField(fieldPath, value) {
+  const update = {};
+  update[fieldPath] = value;
+  DOC_REF.update(update).catch(e => console.error('saveField error:', e));
+}
 
-async function restore() {
-  const btn = document.getElementById('btn');
-  btn.disabled = true; btn.textContent = '復元中...';
-  const log = document.getElementById('log');
-  log.textContent = 'Firestoreに接続中...\n';
+// 医師一人分のスケジュールだけ保存
+// ハイフン入りキー（例: schedules["2026-04-d1"]）はdot notationが使えないのでネストオブジェクトで更新
+function saveScheduleForDoctor(year, month, doctorId) {
+  const k = scKey(year, month, doctorId);
+  const update = {};
+  update['schedules'] = Object.assign({}, DB.schedules);
+  DOC_REF.update(update).catch(e => console.error('saveSchedule error:', e));
+}
+
+// 不在情報全体を保存
+function saveAbsences() {
+  DOC_REF.update({ absences: JSON.parse(JSON.stringify(DB.absences)) })
+    .catch(e => console.error('saveAbsences error:', e));
+}
+
+// 割り振り（assignments全体）を保存
+function saveAssignments(year, month) {
+  DOC_REF.update({ assignments: JSON.parse(JSON.stringify(DB.assignments)) })
+    .catch(e => console.error('saveAssignments error:', e));
+}
+
+// 管理者専用：DB全体を保存
+async function saveDB(onSuccess) {
+  if (saveTimer) clearTimeout(saveTimer);
+  const snapshot = JSON.parse(JSON.stringify(DB));
+  isSaving = true;
+  console.log('💾 保存開始 assignments keys:', Object.keys(snapshot.assignments || {}));
+  console.log('💾 保存データ:', JSON.stringify(snapshot.assignments));
   try {
-    const snap = await DOC_REF.get();
-    let data = snap.exists ? snap.data() : {};
-
-    // 当番表を復元
-    if (!data.assignments) data.assignments = {};
-    data.assignments['2026-04'] = assignments_2026_04;
-    log.textContent += '✅ 当番表セット\n';
-
-    // 不在情報を復元（既存の他月分は保持、4月分のみ上書き）
-    if (!Array.isArray(data.absences)) data.absences = [];
-    // 4月分を削除して新しいデータを追加
-    data.absences = data.absences.filter(a => !a.date.startsWith('2026-04'));
-    data.absences = data.absences.concat(absences_2026_04);
-    log.textContent += '✅ 不在情報セット\n';
-
-    // 累計（FY2025）再計算
-    if (!data.cumulative) data.cumulative = {};
-    data.cumulative['fy2025'] = {};
-    Object.entries(data.assignments).forEach(([mk, ass]) => {
-      const parts = mk.split('-');
-      const y = parseInt(parts[0]), m = parseInt(parts[1]);
-      if ((m >= 4 ? y : y-1) === 2025) {
-        Object.values(ass).forEach(id => {
-          if (id) data.cumulative['fy2025'][id] = (data.cumulative['fy2025'][id]||0)+1;
-        });
-      }
-    });
-    log.textContent += '✅ 累計再計算\n';
-
-    await DOC_REF.set(data);
-    log.textContent += '\n🎉 復元完了！アプリを開いて確認してください。';
-    btn.textContent = '✅ 復元完了'; btn.style.background = '#22c55e';
+    await DOC_REF.set(snapshot);
+    console.log('✅ Firestore書き込み成功');
+    setTimeout(() => { isSaving = false; }, 2000);
+    if (onSuccess) onSuccess();
   } catch(e) {
-    log.textContent += '❌ エラー: ' + e.message;
-    btn.disabled = false; btn.textContent = '▶ 再試行';
+    isSaving = false;
+    console.error('❌ 保存失敗:', e);
+    alert('⚠️ 保存失敗: ' + e.code + '\n' + e.message);
   }
+}
+
+// ローカルフォールバック用
+function loadFromLocal() {
+  try {
+    const raw = localStorage.getItem(SK);
+    if (raw) return mergeWithDefaults(JSON.parse(raw));
+  } catch(e) {}
+  return buildFreshDB();
+}
+
+// DB はまず localStorage で仮起動、Firebase 接続後に上書き
+let DB = loadFromLocal();
+let isSaving = false; // 保存中フラグ
+
+// Firebase リアルタイム同期
+DOC_REF.onSnapshot(snap => {
+  console.log('📡 onSnapshot発火 isSaving=', isSaving, 'assignDirty=', assignDirty);
+  if (isSaving) { console.log('⏸ 保存中のためスキップ'); return; }
+  if (snap.exists) {
+    const data = snap.data();
+    console.log('📡 受信データ assignments:', JSON.stringify(data.assignments));
+    DB = mergeWithDefaults(data);
+  } else {
+    DB = buildFreshDB();
+    DOC_REF.set(JSON.parse(JSON.stringify(DB)));
+  }
+  try { localStorage.setItem(SK, JSON.stringify(DB)); } catch(e) {}
+  const overlay = document.getElementById('fb-loading');
+  if (overlay) overlay.style.display = 'none';
+  if (assignDirty) { console.log('⏸ 編集中のため再描画スキップ'); return; }
+  refreshCurrentScreen();
+  const activeTab = document.querySelector('.adm-tab.active');
+  if (activeTab && activeTab.dataset.tab === 't2') {
+    try { renderResTab(); } catch(e) {}
+  }
+}, err => {
+  console.error('Firestore error:', err);
+  document.getElementById('fb-loading').style.display = 'none';
+  alert('⚠️ Firebaseへの接続に失敗しました。オフラインモードで動作します。');
+});
+
+// （旧 loadDB / saveDB / let DB は上部の Firebase セクションで定義済み）
+
+
+// ══════════════════════════════════════════════════
+//  HOLIDAYS (2025-2027)
+// ══════════════════════════════════════════════════
+const HOLS = new Set([
+  '2025-01-01','2025-01-13','2025-02-11','2025-02-23','2025-02-24',
+  '2025-03-20','2025-04-29','2025-05-03','2025-05-04','2025-05-05',
+  '2025-05-06','2025-07-21','2025-08-11','2025-09-15','2025-09-22','2025-09-23',
+  '2025-10-13','2025-11-03','2025-11-23','2025-11-24',
+  '2026-01-01','2026-01-12','2026-02-11','2026-02-23','2026-03-20',
+  '2026-04-29','2026-05-03','2026-05-04','2026-05-05','2026-05-06',
+  '2026-07-20','2026-08-11','2026-09-21','2026-09-22','2026-09-23',
+  '2026-10-12','2026-11-03','2026-11-23',
+  '2027-01-01','2027-01-11','2027-02-11','2027-02-23','2027-03-20',
+  '2027-04-29','2027-05-03','2027-05-04','2027-05-05',
+]);
+const isHol = ds => HOLS.has(ds);
+const dow = ds => new Date(ds + 'T00:00:00').getDay();
+const isSat = ds => dow(ds) === 6;
+const isSun = ds => dow(ds) === 0;
+const isWE = ds => isSat(ds) || isSun(ds) || isHol(ds);
+const jpDow = n => '日月火水木金土'[n];
+const daysInMonth = (y,m) => new Date(y, m, 0).getDate();
+const ds = (y,m,d) => `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+const scKey = (y,m,id) => `${y}-${String(m).padStart(2,'0')}-${id}`;
+const monKey = (y,m) => `${y}-${String(m).padStart(2,'0')}`;
+
+// ══════════════════════════════════════════════════
+//  NAVIGATION
+// ══════════════════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+function goHome() { pinBuf = ''; showScreen('screen-role'); }
+
+// Firebase onSnapshot から呼ばれる：現在表示中の画面を再描画
+function refreshCurrentScreen() {
+  const active = document.querySelector('.screen.active');
+  if (!active) return;
+  const id = active.id;
+  if (id === 'screen-role') return;
+  if (id === 'screen-doctor' && DS.id) { renderDocCal(DS.year, DS.month); return; }
+  if (id === 'screen-absence') { renderAbsDocList(); renderAbsInteractiveCal(); renderAbsOverview(); return; }
+  if (id === 'screen-admin') {
+    // アクティブなタブを data-tab 属性で確実に取得
+    const activeTab = document.querySelector('.adm-tab.active');
+    const tid = activeTab ? activeTab.dataset.tab : 't1';
+    showAdmTab(tid || 't1');
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  DOCTOR MODE
+// ══════════════════════════════════════════════════
+let DS = { id:null, year:0, month:0, sched:{} };
+
+function enterDoctorMode() {
+  DS.id = null; DS.sched = {};
+  // 来月をデフォルト表示（毎月の入力は翌月分が基本のため）
+  const n = new Date();
+  let y = n.getFullYear(); let m = n.getMonth() + 2; // 来月
+  if (m > 12) { m = 1; y++; }
+  DS.year = y; DS.month = m;
+  renderDocNameList();
+  document.getElementById('ds-name').style.display = 'block';
+  document.getElementById('ds-cal').style.display = 'none';
+  document.getElementById('ds-done').style.display = 'none';
+  showScreen('screen-doctor');
+}
+
+function renderDocNameList() {
+  const senin = DB.doctors.filter(d => d.type==='senin').sort((a,b)=>a.order-b.order);
+  const henim = DB.doctors.filter(d => d.type==='henim').sort((a,b)=>a.order-b.order);
+  let h = '';
+  if (senin.length) {
+    h += `<div class="doc-type-lbl">専任医師</div><div class="doc-grid">`;
+    senin.forEach(d => h += `<button class="doc-btn" id="db-${d.id}" onclick="selectDoc('${d.id}')">${d.name}</button>`);
+    h += `</div>`;
+  }
+  if (henim.length) {
+    h += `<div class="doc-type-lbl">併任医師</div><div class="doc-grid">`;
+    henim.forEach(d => h += `<button class="doc-btn" id="db-${d.id}" onclick="selectDoc('${d.id}')">${d.name}</button>`);
+    h += `</div>`;
+  }
+  document.getElementById('doc-name-list').innerHTML = h;
+}
+
+function selectDoc(id) {
+  DS.id = id;
+  document.querySelectorAll('.doc-btn').forEach(b => b.classList.remove('sel'));
+  const btn = document.getElementById('db-'+id);
+  if (btn) btn.classList.add('sel');
+  const k = scKey(DS.year, DS.month, id);
+  DS.sched = DB.schedules[k] ? JSON.parse(JSON.stringify(DB.schedules[k])) : {};
+  document.getElementById('ds-cal').style.display = 'block';
+  document.getElementById('ds-done').style.display = 'none';
+  updateMonDisp();
+  renderDocCal();
+  renderAssignedShifts('ds-assigned-cal');
+  document.getElementById('ds-cal').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function changeDocMonth(delta) {
+  DS.month += delta;
+  if (DS.month > 12) { DS.month = 1; DS.year++; }
+  if (DS.month < 1)  { DS.month = 12; DS.year--; }
+  updateMonDisp();
+  const k = scKey(DS.year, DS.month, DS.id);
+  DS.sched = DB.schedules[k] ? JSON.parse(JSON.stringify(DB.schedules[k])) : {};
+  renderDocCal();
+  renderAssignedShifts('ds-assigned-cal');
+}
+
+function updateMonDisp() {
+  document.getElementById('doc-mon-disp').textContent = `${DS.year}年 ${DS.month}月`;
+}
+
+// 確定済み当番日を表示（複数月まとめて表示）
+function renderAssignedShifts(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el || !DS.id) { if(el) el.innerHTML=''; return; }
+
+  const jpDowShort = ['日','月','火','水','木','金','土'];
+  const now = new Date();
+  // 過去3ヶ月 〜 未来3ヶ月の範囲で確定済み当番を探す
+  let rows = [];
+  for (let delta = -3; delta <= 6; delta++) {
+    let y = now.getFullYear(); let m = now.getMonth() + 1 + delta;
+    while (m > 12) { m -= 12; y++; }
+    while (m < 1)  { m += 12; y--; }
+    const k = monKey(y, m);
+    const ass = DB.assignments[k];
+    if (!ass) continue;
+    Object.entries(ass).forEach(([date, docId]) => {
+      if (docId === DS.id) rows.push(date);
+    });
+  }
+  rows.sort();
+
+  if (!rows.length) {
+    el.innerHTML = `<div class="sec-t">📅 確定済み当番日</div><p style="color:var(--tx-l);font-size:13px">まだ当番表が確定されていません</p>`;
+    return;
+  }
+
+  // 月ごとにグループ化
+  const byMonth = {};
+  rows.forEach(date => {
+    const ym = date.slice(0,7);
+    if (!byMonth[ym]) byMonth[ym] = [];
+    byMonth[ym].push(date);
+  });
+
+  let h = `<div class="sec-t">📅 確定済み当番日（${rows.length}回）</div>`;
+  Object.entries(byMonth).forEach(([ym, dates]) => {
+    const [y, m] = ym.split('-').map(Number);
+    h += `<div style="margin-bottom:12px">
+      <div style="font-weight:700;font-size:13px;color:var(--teal);margin-bottom:6px">${y}年${m}月（${dates.length}回）</div>
+      <div class="chips">`;
+    dates.forEach(date => {
+      const d = parseInt(date.split('-')[2]);
+      const dw = dow(date);
+      const isHoliday = isHol(date);
+      const cls = dw===0||isHoliday ? 'chip chip-r' : dw===6 ? 'chip' : 'chip chip-g';
+      const style = dw===6 ? 'background:#EFF6FF;color:#1D4ED8;border-color:#BFDBFE' : '';
+      h += `<span class="${cls}" style="${style}">${m}/${d}（${jpDowShort[dw]}）</span>`;
+    });
+    h += `</div></div>`;
+  });
+
+  el.innerHTML = h;
+}
+
+function renderDocCal() {
+  const { year, month, id } = DS;
+  const doc = DB.doctors.find(d => d.id===id);
+  const total = daysInMonth(year, month);
+  const firstDow = dow(ds(year, month, 1));
+  const headers = ['日','月','火','水','木','金','土'];
+
+  let h = '';
+  headers.forEach((lbl,i) => {
+    h += `<div class="cal-hdr ${i===0?'sun':i===6?'sat':''}">${lbl}</div>`;
+  });
+  for (let i=0; i<firstDow; i++) h += `<div class="cal-day empty"></div>`;
+
+  for (let d=1; d<=total; d++) {
+    const date = ds(year, month, d);
+    const dw = dow(date);
+    const sat = dw===6, sun = dw===0, hol = isHol(date);
+    let cls = 'cal-day';
+    if (sat) cls += ' wk-sat';
+    else if (sun || hol) cls += ' wk-sun';
+    if (hol) cls += ' wk-hol';
+
+    const dnCls = sat ? 'sat' : (sun||hol) ? 'sun' : '';
+    const holMark = hol ? '🎌' : '';
+    // Schedule: 'preferred'(◎) | 'available'(○) | 'unavailable'(×) | undefined
+    const st = DS.sched[date];
+    const valCls = st==='preferred'?'pr':st==='available'?'av':st==='unavailable'?'un':'';
+    const valTxt = st==='preferred'?'◎':st==='available'?'○':st==='unavailable'?'×':'';
+
+    h += `<div class="${cls}" id="cd-${date}" onclick="toggleDay('${date}')" style="cursor:pointer">
+      <div class="cal-dn ${dnCls}">${d}${holMark}</div>
+      <div style="display:flex;align-items:center;justify-content:center;flex:1;padding:4px 2px">
+        <span class="ampm-val ${valCls}" id="dv-${date}" style="width:100%;text-align:center;font-size:16px;padding:3px 0">${valTxt}</span>
+      </div>
+    </div>`;
+  }
+  document.getElementById('doc-calendar').innerHTML = h;
+  updateDocSummary();
+}
+
+function toggleDay(date) {
+  const cur = DS.sched[date];
+  // Cycle: blank → ◎(preferred) → ○(available) → ×(unavailable) → blank
+  if (!cur)                    DS.sched[date] = 'preferred';
+  else if (cur==='preferred')  DS.sched[date] = 'available';
+  else if (cur==='available')  DS.sched[date] = 'unavailable';
+  else                         delete DS.sched[date];
+  const el = document.getElementById(`dv-${date}`);
+  if (el) {
+    const v = DS.sched[date];
+    el.className = 'ampm-val' + (v==='preferred'?' pr':v==='available'?' av':v==='unavailable'?' un':'');
+    el.textContent = v==='preferred'?'◎':v==='available'?'○':v==='unavailable'?'×':'';
+  }
+  updateDocSummary();
+
+// 一括設定
+function bulkSetSchedule(value) {
+  const { year, month } = DS;
+  const total = daysInMonth(year, month);
+  for (let d = 1; d <= total; d++) {
+    const date = ds(year, month, d);
+    if (value) DS.sched[date] = value;
+    else delete DS.sched[date];
+  }
+  renderDocCal();
+}
+}
+
+function updateDocSummary() {
+  const { year, month } = DS;
+  const total = daysInMonth(year, month);
+  const prList=[], avList=[], unList=[];
+  for (let d=1; d<=total; d++) {
+    const date = ds(year, month, d);
+    const st = DS.sched[date];
+    if (!st) continue;
+    const lbl = `${month}/${d}(${jpDow(dow(date))})`;
+    if (st==='preferred')   prList.push(lbl);
+    if (st==='available')   avList.push(lbl);
+    if (st==='unavailable') unList.push(lbl);
+  }
+  const sec = document.getElementById('doc-summary-sec');
+  const box = document.getElementById('doc-summary');
+  if (!prList.length && !avList.length && !unList.length) { sec.style.display='none'; return; }
+  sec.style.display = 'block';
+  let h = '';
+  if (prList.length) {
+    h += `<p style="font-size:12px;font-weight:700;color:#15803D;margin-bottom:6px">◎ 希望日（当直）（${prList.length}日）</p>`;
+    h += `<div class="chips" style="margin-bottom:10px">${prList.map(l=>`<span class="chip chip-pr">◎ ${l}</span>`).join('')}</div>`;
+  }
+  if (avList.length) {
+    h += `<p style="font-size:12px;font-weight:700;color:#854D0E;margin-bottom:6px;margin-top:6px">○ 希望日（${avList.length}日）</p>`;
+    h += `<div class="chips" style="margin-bottom:10px">${avList.map(l=>`<span class="chip chip-g">○ ${l}</span>`).join('')}</div>`;
+  }
+  if (unList.length) {
+    h += `<p style="font-size:12px;font-weight:700;color:#DC2626;margin-bottom:6px;margin-top:6px">× 不可（${unList.length}日）</p>`;
+    h += `<div class="chips">${unList.map(l=>`<span class="chip chip-r">× ${l}</span>`).join('')}</div>`;
+  }
+  box.innerHTML = h;
+}
+
+function submitSchedule() {
+  if (!DS.id) { alert('名前を選択してください'); return; }
+  const k = scKey(DS.year, DS.month, DS.id);
+  DB.schedules[k] = JSON.parse(JSON.stringify(DS.sched));
+  saveScheduleForDoctor(DS.year, DS.month, DS.id);
+  document.getElementById('ds-cal').style.display = 'none';
+  document.getElementById('ds-name').style.display = 'none';
+  document.getElementById('ds-done').style.display = 'block';
+  renderAssignedShifts('ds-assigned-done');
+}
+
+function resetDoctorMode() {
+  DS.id = null; DS.sched = {};
+  renderDocNameList();
+  document.getElementById('ds-name').style.display = 'block';
+  document.getElementById('ds-cal').style.display = 'none';
+  document.getElementById('ds-done').style.display = 'none';
+}
+
+// ══════════════════════════════════════════════════
+//  ABSENCE MODE
+// ══════════════════════════════════════════════════
+let absSelectedDoc = null;
+// 来月をデフォルトに
+const _absNow = new Date();
+let absYear = _absNow.getMonth() === 11 ? _absNow.getFullYear() + 1 : _absNow.getFullYear();
+let absMonth = _absNow.getMonth() === 11 ? 1 : _absNow.getMonth() + 2;
+let absDayModalDate = null;
+
+function enterAbsenceMode() {
+  absSelectedDoc = null;
+  // 来月をデフォルト表示
+  const n = new Date();
+  if (n.getMonth() === 11) { absYear = n.getFullYear() + 1; absMonth = 1; }
+  else { absYear = n.getFullYear(); absMonth = n.getMonth() + 2; }
+  initAbsViewSelectors();
+  renderAbsDocList();
+  document.getElementById('abs-cal-wrap').style.display = 'none';
+  document.getElementById('abs-overview-wrap').style.display = 'block';
+  renderAbsOverview();
+  showScreen('screen-absence');
+}
+
+function initAbsViewSelectors() {
+  const n = new Date(); const cy = n.getFullYear();
+  const ySel = document.getElementById('abs-v-year');
+  ySel.innerHTML = '';
+  for (let y=cy-1; y<=cy+2; y++) ySel.innerHTML += `<option value="${y}" ${y===absYear?'selected':''}>${y}年</option>`;
+  const mSel = document.getElementById('abs-v-month');
+  mSel.innerHTML = '';
+  for (let m=1; m<=12; m++) mSel.innerHTML += `<option value="${m}" ${m===absMonth?'selected':''}>${m}月</option>`;
+}
+
+function renderAbsDocList() {
+  const senin = DB.doctors.filter(d=>d.type==='senin').sort((a,b)=>a.order-b.order);
+  let h = `<div class="doc-grid">`;
+  senin.forEach(d => {
+    h += `<button class="doc-btn ${absSelectedDoc===d.id?'sel':''}" onclick="selectAbsDoc('${d.id}')">${d.name}</button>`;
+  });
+  h += `</div>`;
+  document.getElementById('abs-doc-list').innerHTML = h;
+}
+
+function selectAbsDoc(id) {
+  absSelectedDoc = id;
+  renderAbsDocList();
+  document.getElementById('abs-cal-wrap').style.display = 'block';
+  document.getElementById('abs-overview-wrap').style.display = 'none';
+  const doc = DB.doctors.find(d=>d.id===id);
+  document.getElementById('abs-cal-title').textContent = (doc?.name||'') + ' の不在カレンダー';
+  updateAbsMonDisp();
+  renderAbsInteractiveCal();
+  renderAbsMyEntries();
+  document.getElementById('abs-cal-wrap').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function changeAbsMonth(delta) {
+  absMonth += delta;
+  if (absMonth > 12) { absMonth = 1; absYear++; }
+  if (absMonth < 1)  { absMonth = 12; absYear--; }
+  updateAbsMonDisp();
+  renderAbsInteractiveCal();
+  renderAbsMyEntries();
+}
+
+function updateAbsMonDisp() {
+  document.getElementById('abs-mon-disp').textContent = `${absYear}年 ${absMonth}月`;
+}
+
+function renderAbsInteractiveCal() {
+  const total = daysInMonth(absYear, absMonth);
+  const firstDow = dow(ds(absYear, absMonth, 1));
+  const reasonCls = { '有休':'abs-yukyuu','学会':'abs-gakkai','出張':'abs-shuccho','その他':'abs-other' };
+  const headers = ['日','月','火','水','木','金','土'];
+
+  let h = '';
+  headers.forEach((lbl,i) => { h += `<div class="abs-cal-hdr ${i===0?'sun':i===6?'sat':''}">${lbl}</div>`; });
+  for (let i=0; i<firstDow; i++) h += `<div class="abs-cal-cell empty"></div>`;
+
+  for (let d=1; d<=total; d++) {
+    const date = ds(absYear, absMonth, d);
+    const dw = dow(date);
+    const hol = isHol(date);
+    let cls = 'abs-cal-cell';
+    if (dw===6) cls += ' sat'; else if (dw===0||hol) cls += ' sun hol';
+
+    const dayAbs = DB.absences.filter(a => a.date===date && a.doctorId===absSelectedDoc);
+    const holMk = hol ? '🎌' : '';
+    let entriesH = dayAbs.map(a => {
+      const rc = reasonCls[a.reason]||'abs-other';
+      const prd = a.period!=='全日' ? `(${a.period})` : '';
+      return `<div class="abs-entry ${rc}" style="font-size:9px">${a.reason}${prd}</div>`;
+    }).join('');
+
+    const hasAbs = dayAbs.length > 0;
+    h += `<div class="${cls}" onclick="openAbsDayModal('${date}')" style="cursor:pointer;transition:opacity .15s" onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'">
+      <div class="abs-dn" style="${hasAbs?'color:var(--teal-d);font-weight:700':''}">${d}${holMk}</div>
+      ${entriesH}
+      ${!hasAbs ? `<div style="color:var(--border);font-size:18px;text-align:center;margin-top:2px">+</div>` : ''}
+    </div>`;
+  }
+  document.getElementById('abs-cal-interactive').innerHTML = h;
+}
+
+function openAbsDayModal(date) {
+  if (!absSelectedDoc) return;
+  absDayModalDate = date;
+  const [y,m,d] = date.split('-').map(Number);
+  const dw = dow(date);
+  const weekend = dw===0 || dw===6 || isHol(date);
+  const doc = DB.doctors.find(x=>x.id===absSelectedDoc);
+
+  document.getElementById('abs-day-title').textContent =
+    `${doc?.name} ／ ${m}月${d}日（${jpDow(dw)}）`;
+
+  // Period options
+  const pSel = document.getElementById('abs-day-period');
+  if (weekend) {
+    pSel.innerHTML = '<option value="全日">全日</option>';
+    pSel.disabled = true; pSel.style.opacity = '0.6';
+  } else {
+    pSel.innerHTML = `<option value="全日">全日</option><option value="AM">午前（AM）</option><option value="PM">午後（PM）</option>`;
+    pSel.disabled = false; pSel.style.opacity = '1';
+  }
+
+  // Show existing entries for this day
+  const dayAbs = DB.absences.filter(a => a.date===date && a.doctorId===absSelectedDoc);
+  const reasonCls = { '有休':'abs-yukyuu','学会':'abs-gakkai','出張':'abs-shuccho','その他':'abs-other' };
+  let eh = '';
+  if (dayAbs.length) {
+    eh = `<div style="margin-bottom:10px;border-top:1px solid var(--border);padding-top:10px">
+      <p style="font-size:11px;font-weight:700;color:var(--tx-l);margin-bottom:6px">登録済み</p>`;
+    dayAbs.forEach(a => {
+      const rc = reasonCls[a.reason]||'abs-other';
+      eh += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span class="abs-entry ${rc}" style="font-size:11px;padding:2px 7px">${a.reason} ${a.period!=='全日'?a.period:''}</span>
+        <span style="font-size:11px;color:var(--tx-l);flex:1">${a.note||''}</span>
+        <button class="ib dng" id="del-abs-${a.id}" onclick="deleteAbsenceFromModal('${a.id}','${date}')" style="flex-shrink:0">🗑️</button>
+      </div>`;
+    });
+    eh += `</div>`;
+  }
+  document.getElementById('abs-day-existing').innerHTML = eh;
+  document.getElementById('abs-day-note').value = '';
+  document.getElementById('abs-day-reason').value = '出張';
+  document.getElementById('abs-day-modal').classList.add('open');
+}
+
+function addAbsFromModal() {
+  if (!absSelectedDoc || !absDayModalDate) return;
+  const period = document.getElementById('abs-day-period').value;
+  const reason = document.getElementById('abs-day-reason').value;
+  const note   = document.getElementById('abs-day-note').value.trim();
+  DB.absences.push({
+    id: 'a' + Date.now(), doctorId: absSelectedDoc,
+    date: absDayModalDate, period, reason, note
+  });
+  saveAbsences();
+  closeModal('abs-day-modal');
+  renderAbsInteractiveCal();
+  renderAbsMyEntries();
+}
+
+function deleteAbsenceFromModal(id, date) {
+  const btn = document.getElementById('del-abs-' + id);
+  if (!btn) return;
+  if (btn.dataset.confirming === '1') {
+    DB.absences = DB.absences.filter(a => a.id !== id);
+    saveAbsences();
+    openAbsDayModal(date); // refresh modal
+    renderAbsInteractiveCal();
+    renderAbsMyEntries();
+  } else {
+    btn.dataset.confirming = '1';
+    btn.textContent = '確認';
+    btn.style.cssText = 'background:#FEE2E2;border-color:#EF4444;color:#EF4444;font-size:10px;width:auto;padding:0 8px;height:32px;border-radius:6px;border:1px solid;cursor:pointer';
+    setTimeout(() => {
+      if (btn && btn.dataset.confirming === '1') {
+        btn.dataset.confirming = '0'; btn.textContent = '🗑️'; btn.style.cssText = '';
+      }
+    }, 3000);
+  }
+}
+
+function renderAbsMyEntries() {
+  if (!absSelectedDoc) return;
+  const reasonCls = { '有休':'abs-yukyuu','学会':'abs-gakkai','出張':'abs-shuccho','その他':'abs-other' };
+  const entries = DB.absences.filter(a=>a.doctorId===absSelectedDoc && (() => {
+    const [y,m] = a.date.split('-').map(Number);
+    return y===absYear && m===absMonth;
+  })()).sort((a,b)=>a.date.localeCompare(b.date));
+
+  if (!entries.length) {
+    document.getElementById('abs-my-entries').innerHTML = '<p style="color:var(--tx-l);font-size:12px">この月の不在情報はありません</p>';
+    return;
+  }
+  let h = '';
+  entries.forEach(a => {
+    const [y,m,d] = a.date.split('-').map(Number);
+    const rc = reasonCls[a.reason]||'abs-other';
+    h += `<div class="abs-list-item">
+      <span class="abs-reason-badge abs-entry ${rc}">${a.reason}</span>
+      <div class="abs-info">
+        <div class="abs-date">${m}月${d}日（${jpDow(dow(a.date))}）${a.period!=='全日'?' '+a.period:''}</div>
+        <div class="abs-detail">${a.note||''}</div>
+      </div>
+      <button class="ib dng" id="del-abs-${a.id}" onclick="deleteAbsFromList('${a.id}')">🗑️</button>
+    </div>`;
+  });
+  document.getElementById('abs-my-entries').innerHTML = h;
+}
+
+function deleteAbsFromList(id) {
+  const btn = document.getElementById('del-abs-' + id);
+  if (!btn) return;
+  if (btn.dataset.confirming === '1') {
+    DB.absences = DB.absences.filter(a => a.id !== id);
+    saveAbsences();
+    renderAbsInteractiveCal();
+    renderAbsMyEntries();
+  } else {
+    btn.dataset.confirming = '1';
+    btn.textContent = '確認';
+    btn.style.background = '#FEE2E2';
+    btn.style.borderColor = '#EF4444';
+    btn.style.color = '#EF4444';
+    btn.style.fontSize = '10px';
+    btn.style.width = 'auto';
+    btn.style.padding = '0 8px';
+    setTimeout(() => {
+      if (btn && btn.dataset.confirming === '1') {
+        btn.dataset.confirming = '0'; btn.textContent = '🗑️'; btn.style.cssText = '';
+      }
+    }, 3000);
+  }
+}
+
+// Overview calendar (all doctors, read-only)
+function toggleAbsOverview() {
+  const panel = document.getElementById('abs-inline-overview');
+  const btn = document.getElementById('abs-overview-toggle-btn');
+  const isOpen = panel.style.display !== 'none';
+  if (isOpen) {
+    panel.style.display = 'none';
+    btn.textContent = '👥 全員の不在状況を確認';
+  } else {
+    panel.style.display = 'block';
+    btn.textContent = '✕ 全員表示を閉じる';
+    renderAbsOverviewInline();
+    panel.scrollIntoView({behavior:'smooth', block:'start'});
+  }
+}
+
+function renderAbsOverviewInline() {
+  const year = absYear, month = absMonth;
+  const total = daysInMonth(year, month);
+  const firstDow = dow(ds(year, month, 1));
+  const reasonCls = { '有休':'abs-yukyuu','学会':'abs-gakkai','出張':'abs-shuccho','その他':'abs-other' };
+  const headers = ['日','月','火','水','木','金','土'];
+
+  let h = '';
+  headers.forEach((lbl,i) => { h += `<div class="abs-cal-hdr ${i===0?'sun':i===6?'sat':''}">${lbl}</div>`; });
+  for (let i=0; i<firstDow; i++) h += `<div class="abs-cal-cell empty"></div>`;
+  for (let d=1; d<=total; d++) {
+    const date = ds(year, month, d);
+    const dw = dow(date);
+    let cls = 'abs-cal-cell';
+    if (dw===6) cls += ' sat'; else if (dw===0||isHol(date)) cls += ' sun hol';
+    const dayAbs = DB.absences.filter(a => a.date===date);
+    const holMk = isHol(date) ? '🎌' : '';
+    let entriesH = dayAbs.map(a => {
+      const doc = DB.doctors.find(x=>x.id===a.doctorId);
+      const nm = doc ? doc.name.slice(0,2) : '';
+      const rc = reasonCls[a.reason]||'abs-other';
+      const prd = a.period!=='全日' ? `(${a.period})` : '';
+      return `<div class="abs-entry ${rc}" style="font-size:9px">${nm}${prd}</div>`;
+    }).join('');
+    h += `<div class="${cls}"><div class="abs-dn">${d}${holMk}</div>${entriesH}</div>`;
+  }
+  document.getElementById('abs-cal-overview-inline').innerHTML = h;
+
+  const monthAbs = DB.absences.filter(a => {
+    const [y,m] = a.date.split('-').map(Number);
+    return y===year && m===month;
+  }).sort((a,b) => a.date.localeCompare(b.date));
+  let lh = '';
+  monthAbs.forEach(a => {
+    const doc = DB.doctors.find(x=>x.id===a.doctorId);
+    const [y,m,d] = a.date.split('-').map(Number);
+    const rc = reasonCls[a.reason]||'abs-other';
+    lh += `<div class="abs-list-item">
+      <span class="abs-reason-badge abs-entry ${rc}">${a.reason}</span>
+      <div class="abs-info">
+        <div class="abs-date">${m}月${d}日（${jpDow(dow(a.date))}）${a.period!=='全日'?' '+a.period:''}</div>
+        <div class="abs-detail">${doc?.name||''} ${a.note?'／'+a.note:''}</div>
+      </div>
+    </div>`;
+  });
+  document.getElementById('abs-list-overview-inline').innerHTML = lh || '<p style="color:var(--tx-l);font-size:13px">この月の不在情報はありません</p>';
+}
+
+function renderAbsOverview() {
+  const year  = parseInt(document.getElementById('abs-v-year').value);
+  const month = parseInt(document.getElementById('abs-v-month').value);
+  const total = daysInMonth(year, month);
+  const firstDow = dow(ds(year, month, 1));
+  const reasonCls = { '有休':'abs-yukyuu','学会':'abs-gakkai','出張':'abs-shuccho','その他':'abs-other' };
+  const headers = ['日','月','火','水','木','金','土'];
+
+  let h = '';
+  headers.forEach((lbl,i) => { h += `<div class="abs-cal-hdr ${i===0?'sun':i===6?'sat':''}">${lbl}</div>`; });
+  for (let i=0; i<firstDow; i++) h += `<div class="abs-cal-cell empty"></div>`;
+
+  for (let d=1; d<=total; d++) {
+    const date = ds(year, month, d);
+    const dw = dow(date);
+    let cls = 'abs-cal-cell';
+    if (dw===6) cls += ' sat'; else if (dw===0||isHol(date)) cls += ' sun hol';
+
+    const dayAbs = DB.absences.filter(a => a.date===date);
+    const holMk = isHol(date) ? '🎌' : '';
+    let entriesH = dayAbs.map(a => {
+      const doc = DB.doctors.find(x=>x.id===a.doctorId);
+      const nm = doc ? doc.name.slice(0,2) : '';
+      const rc = reasonCls[a.reason]||'abs-other';
+      const prd = a.period!=='全日' ? `(${a.period})` : '';
+      return `<div class="abs-entry ${rc}" title="${doc?.name} ${a.period} ${a.reason}${a.note?'：'+a.note:''}" style="font-size:9px">${nm}${prd}</div>`;
+    }).join('');
+
+    h += `<div class="${cls}">
+      <div class="abs-dn">${d}${holMk}</div>
+      ${entriesH}
+    </div>`;
+  }
+  document.getElementById('abs-cal-view').innerHTML = h;
+
+  // List
+  const monthAbs = DB.absences.filter(a => {
+    const [y,m] = a.date.split('-').map(Number);
+    return y===year && m===month;
+  }).sort((a,b) => a.date.localeCompare(b.date));
+
+  if (!monthAbs.length) {
+    document.getElementById('abs-list-view').innerHTML = '<p style="color:var(--tx-l);font-size:13px">この月の不在情報はありません</p>';
+    return;
+  }
+  let lh = '';
+  monthAbs.forEach(a => {
+    const doc = DB.doctors.find(x=>x.id===a.doctorId);
+    const [y,m,d] = a.date.split('-').map(Number);
+    const rc = reasonCls[a.reason]||'abs-other';
+    lh += `<div class="abs-list-item">
+      <span class="abs-reason-badge abs-entry ${rc}">${a.reason}</span>
+      <div class="abs-info">
+        <div class="abs-date">${m}月${d}日（${jpDow(dow(a.date))}）${a.period!=='全日'?' '+a.period:''}</div>
+        <div class="abs-detail">${doc?.name||''} ${a.note?'／'+a.note:''}</div>
+      </div>
+    </div>`;
+  });
+  document.getElementById('abs-list-view').innerHTML = lh;
+}
+
+// ══════════════════════════════════════════════════
+//  ADMIN PIN
+// ══════════════════════════════════════════════════
+let pinBuf = '';
+function enterAdminMode() { pinBuf=''; updatePinDots(); document.getElementById('pin-err').textContent=''; showScreen('screen-pin'); }
+function pinIn(v) { if(pinBuf.length>=4)return; pinBuf+=v; updatePinDots(); if(pinBuf.length===4) setTimeout(checkPin,180); }
+function pinDel() { pinBuf=pinBuf.slice(0,-1); updatePinDots(); }
+function updatePinDots() { for(let i=0;i<4;i++) document.getElementById('pd'+i).classList.toggle('on',i<pinBuf.length); }
+function checkPin() {
+  if(pinBuf===DB.pin) { pinBuf=''; initAdmSelectors(); showScreen('screen-admin'); showAdmTab('t1'); }
+  else { document.getElementById('pin-err').textContent='PINコードが違います'; pinBuf=''; updatePinDots(); }
+}
+
+// ══════════════════════════════════════════════════
+//  ADMIN TABS
+// ══════════════════════════════════════════════════
+function showAdmTab(id) {
+  document.querySelectorAll('.adm-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.adm-tab').forEach(b=>b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.getElementById('btn-'+id).classList.add('active');
+  if(id==='t1') renderDcListAdm();
+  if(id==='t2') renderResTab();
+  if(id==='t3') renderAssignTab();
+  if(id==='t4') renderCalTab();
+  if(id==='t6') renderStatsTab();
+}
+
+function initAdmSelectors() {
+  const n=new Date(); const cy=n.getFullYear();
+  // 来月をデフォルトに
+  let nm = n.getMonth()+2; let ny = cy;
+  if (nm > 12) { nm = 1; ny++; }
+  [['r-year','r-month'],['a-year','a-month'],['c-year','c-month'],['e-year','e-month']].forEach(([y,m]) => {
+    const ys=document.getElementById(y), ms=document.getElementById(m);
+    if(!ys||!ms)return;
+    ys.innerHTML=''; for(let yr=cy-1;yr<=cy+2;yr++) ys.innerHTML+=`<option value="${yr}" ${yr===ny?'selected':''}>${yr}年</option>`;
+    ms.innerHTML=''; for(let mo=1;mo<=12;mo++) ms.innerHTML+=`<option value="${mo}" ${mo===nm?'selected':''}>${mo}月</option>`;
+  });
+  const ss=document.getElementById('st-year');
+  if(ss){ ss.innerHTML=''; const fy=n.getMonth()>=3?cy:cy-1;
+    for(let yr=fy-2;yr<=fy+1;yr++) ss.innerHTML+=`<option value="${yr}" ${yr===fy?'selected':''}>${yr}年度</option>`;
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  T1: DOCTOR MANAGEMENT
+// ══════════════════════════════════════════════════
+let editDcId = null;
+let dragSrcId = null;
+
+function renderDcListAdm() {
+  const sorted = [...DB.doctors].sort((a,b)=>a.order-b.order);
+  const container = document.getElementById('adm-dc-list');
+  if (!sorted.length) { container.innerHTML = '<p style="color:var(--tx-l)">医師が登録されていません</p>'; return; }
+
+  container.innerHTML = '<p style="font-size:12px;color:var(--tx-l);margin-bottom:10px">☰ をドラッグして並び替えできます</p>';
+
+  sorted.forEach(d => {
+    const card = document.createElement('div');
+    card.className = 'dc-card';
+    card.setAttribute('draggable', 'true');
+    card.dataset.id = d.id;
+    const bc = d.type==='senin'?'badge-sn':'badge-hn';
+    const bt = d.type==='senin'?'専任':'併任';
+    card.innerHTML = `
+      <span class="drag-handle">☰</span>
+      <div class="dc-av">${d.name.charAt(0)}</div>
+      <div class="dc-info">
+        <div class="dc-name">${d.name}</div>
+        <div class="dc-contact">📟 PHS:${d.phs||'—'}${d.mobile?' 📱'+d.mobile:''}</div>
+      </div>
+      <span class="badge ${bc}">${bt}</span>
+      <div class="dc-acts">
+        <button class="ib" onclick="openDcModal('${d.id}')">✏️</button>
+        <button class="ib dng" id="del-doc-${d.id}" onclick="deleteDoc('${d.id}')">🗑️</button>
+      </div>`;
+
+    card.addEventListener('dragstart', e => {
+      dragSrcId = d.id;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', d.id);
+      card.classList.add('dragging');
+    });
+    card.addEventListener('dragend', () => {
+      dragSrcId = null;
+      document.querySelectorAll('.dc-card').forEach(c => c.classList.remove('dragging','drag-over'));
+    });
+    card.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (dragSrcId && dragSrcId !== d.id) card.classList.add('drag-over');
+    });
+    card.addEventListener('dragleave', e => {
+      // Only remove if leaving the card itself (not a child element)
+      if (!card.contains(e.relatedTarget)) card.classList.remove('drag-over');
+    });
+    card.addEventListener('drop', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      card.classList.remove('drag-over');
+      const fromId = dragSrcId || e.dataTransfer.getData('text/plain');
+      const toId = d.id;
+      if (!fromId || fromId === toId) return;
+      // Re-order: rebuild order array by current DOM position, then insert fromId before toId
+      const currentOrder = [...container.querySelectorAll('.dc-card[data-id]')].map(el => el.dataset.id);
+      const fromIdx = currentOrder.indexOf(fromId);
+      const toIdx   = currentOrder.indexOf(toId);
+      if (fromIdx === -1 || toIdx === -1) return;
+      currentOrder.splice(fromIdx, 1);
+      const newToIdx = currentOrder.indexOf(toId);
+      currentOrder.splice(newToIdx, 0, fromId);
+      // Assign clean sequential order values
+      currentOrder.forEach((id, i) => {
+        const doc = DB.doctors.find(x => x.id === id);
+        if (doc) doc.order = i + 1;
+      });
+      saveDB();
+      renderDcListAdm();
+    });
+
+    container.appendChild(card);
+  });
+}
+
+function openDcModal(id) {
+  editDcId = id||null;
+  if(id) {
+    const d=DB.doctors.find(x=>x.id===id);
+    document.getElementById('dc-modal-title').textContent='医師を編集';
+    document.getElementById('f-name').value=d.name;
+    document.getElementById('f-phs').value=d.phs;
+    document.getElementById('f-mob').value=d.mobile||'';
+    document.getElementById('f-type').value=d.type;
+  } else {
+    document.getElementById('dc-modal-title').textContent='医師を追加';
+    ['f-name','f-phs','f-mob'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('f-type').value='senin';
+  }
+  document.getElementById('dc-modal').classList.add('open');
+}
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function saveDoctor() {
+  const name=document.getElementById('f-name').value.trim();
+  const phs=document.getElementById('f-phs').value.trim();
+  const mob=document.getElementById('f-mob').value.trim();
+  const type=document.getElementById('f-type').value;
+  if(!name){alert('氏名を入力してください');return;}
+  if(editDcId) {
+    const d=DB.doctors.find(x=>x.id===editDcId);
+    d.name=name;d.phs=phs;d.mobile=mob;d.type=type;
+  } else {
+    const mo=Math.max(0,...DB.doctors.map(d=>d.order));
+    DB.doctors.push({id:'d'+Date.now(),name,phs,mobile:mob,type,order:mo+1});
+  }
+  saveDB(); closeModal('dc-modal'); renderDcListAdm();
+}
+function deleteDoc(id) {
+  const btn = document.getElementById('del-doc-' + id);
+  if (!btn) return;
+  if (btn.dataset.confirming === '1') {
+    DB.doctors = DB.doctors.filter(d => d.id !== id);
+    saveDB();
+    renderDcListAdm();
+  } else {
+    btn.dataset.confirming = '1';
+    btn.textContent = '確認';
+    btn.style.background = '#FEE2E2';
+    btn.style.borderColor = '#EF4444';
+    btn.style.color = '#EF4444';
+    btn.style.fontSize = '10px';
+    btn.style.width = 'auto';
+    btn.style.padding = '0 8px';
+    setTimeout(() => {
+      if (btn && btn.dataset.confirming === '1') {
+        btn.dataset.confirming = '0';
+        btn.textContent = '🗑️';
+        btn.style.cssText = '';
+      }
+    }, 3000);
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  T2: RESPONSE STATUS
+// ══════════════════════════════════════════════════
+function renderResTab() {
+  const year=parseInt(document.getElementById('r-year').value);
+  const month=parseInt(document.getElementById('r-month').value);
+  const total=daysInMonth(year,month);
+  const doctors=[...DB.doctors].sort((a,b)=>a.order-b.order);
+
+  // Status grid
+  let sh=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin-bottom:16px">`;
+  doctors.forEach(d => {
+    const k=scKey(year,month,d.id);
+    const sc=DB.schedules[k];
+    const hasData=sc&&Object.keys(sc).length>0;
+    sh+=`<div style="background:#fff;border-radius:var(--r);padding:11px;border:1px solid var(--border);box-shadow:var(--sh-s)">
+      <div style="font-weight:700;margin-bottom:5px;font-size:13px">${d.name}</div>
+      <span class="sb ${hasData?'sb-ok':'sb-ng'}">${hasData?'✅ 回答済':'⏳ 未回答'}</span>
+    </div>`;
+  });
+  sh+=`</div>`;
+  document.getElementById('res-status').innerHTML=sh;
+
+  // Matrix: show AM/PM in each cell compactly
+  let mh=`<table class="rm"><thead><tr><th>医師</th>`;
+  for(let d=1;d<=total;d++) {
+    const date=ds(year,month,d);
+    const dw=dow(date);
+    let cls=dw===6?'rm-sat':dw===0||isHol(date)?'rm-sun':'';
+    mh+=`<th class="${cls}">${d}</th>`;
+  }
+  mh+=`</tr></thead><tbody>`;
+
+  doctors.forEach(d => {
+    const k=scKey(year,month,d.id);
+    const sc=DB.schedules[k]||{};
+    mh+=`<tr><td class="nm">${d.name}</td>`;
+    for(let day=1;day<=total;day++) {
+      const date=ds(year,month,day);
+      const dw=dow(date);
+      const entry=sc[date];
+      let disp='', cellCls='';
+      if (!entry) {
+        // no data — blank
+      } else if (typeof entry === 'string') {
+        if (entry==='preferred')   { disp='◎'; cellCls='rm-av'; }
+        else if (entry==='available')   { disp='○'; cellCls='rm-hf'; }
+        else if (entry==='unavailable') { disp='×'; cellCls='rm-un'; }
+      } else {
+        // legacy am/pm object format
+        const am=entry.am, pm=entry.pm;
+        if(am==='available'&&pm==='available') { disp='○'; cellCls='rm-av'; }
+        else if(am==='unavailable'&&pm==='unavailable') { disp='×'; cellCls='rm-un'; }
+        else if(am||pm) {
+          const at=am==='available'?'○':am==='unavailable'?'×':'';
+          const pt=pm==='available'?'○':pm==='unavailable'?'×':'';
+          disp=`<span style="font-size:9px">${at}/${pt}</span>`;
+          cellCls='rm-hf';
+        }
+      }
+      const hc=isHol(date)?'rm-sun':dw===6?'rm-sat':dw===0?'rm-sun':'';
+      mh+=`<td class="${cellCls||hc}" onclick="toggleAdmCell('${d.id}','${date}')" style="cursor:pointer;min-width:26px">${disp}</td>`;
+    }
+    mh+=`</tr>`;
+  });
+  mh+=`</tbody></table>`;
+  document.getElementById('res-matrix').innerHTML=mh;
+}
+
+function toggleAdmCell(docId, date) {
+  const [y,m]=date.split('-').map(Number);
+  const k=scKey(y,m,docId);
+  if(!DB.schedules[k])DB.schedules[k]={};
+  const sc=DB.schedules[k];
+  const cur=sc[date];
+  // Cycle: blank → ○(available) → ×(unavailable) → blank
+  if(!cur) { sc[date]='available'; }
+  else if(cur==='available'||(cur.am==='available')) { sc[date]='unavailable'; }
+  else { delete sc[date]; }
+  saveDB(); renderResTab();
+}
+
+// ══════════════════════════════════════════════════
+//  T3: AUTO ASSIGN
+// ══════════════════════════════════════════════════
+let currentAss = {};
+let assignDirty = false; // 手動編集中フラグ
+let acceptedOverrides = new Set(); // ×承認済み日付（赤ハイライト不要）
+
+function renderAssignTab() {
+  const year=parseInt(document.getElementById('a-year').value);
+  const month=parseInt(document.getElementById('a-month').value);
+  const k=monKey(year,month);
+  // 編集中でなければDBから読み込む
+  if (!assignDirty) {
+    currentAss=DB.assignments[k]?{...DB.assignments[k]}:{};
+  }
+  renderShiftTargets(year, month);
+  renderAssignCal(year, month);
+}
+
+// デフォルト目標回数（31日月基準）
+// 30日月は大本晃弘(d3)を1減、28/29日月はさらに要調整
+const DEFAULT_TARGETS = {
+  'd0': 0,  // 北野滋久
+  'd1': 0,  // 古川孝広
+  'd2': 4,  // 宮脇英里子
+  'd3': 5,  // 大本晃弘（30日→4、31日→5）
+  'd8': 7,  // 竹村弘司
+  'd9': 7,  // 大岩修太郎
+  'd4': 1,  // 尾崎由記範
+  'd5': 1,  // 福岡聖大
+  'd6': 1,  // 増田淳
+  'd7': 5,  // 仲尾岳大
+};
+
+function getShiftTargets(year, month) {
+  const saved = DB.shiftTargets[monKey(year,month)];
+  if (saved && Object.keys(saved).length > 0) return saved;
+  // 未設定の場合はデフォルト値を返す（日数で自動調整）
+  const days = daysInMonth(year, month);
+  const defaults = { ...DEFAULT_TARGETS };
+  if (days === 30) defaults['d3'] = 4; // 大本晃弘を4に
+  if (days <= 29)  defaults['d3'] = 4; // 28/29日も4に
+  return defaults;
+}
+
+function renderShiftTargets(year, month) {
+  const doctors=[...DB.doctors].sort((a,b)=>a.order-b.order);
+  const targets=getShiftTargets(year,month);
+  const k=monKey(year,month);
+  const totalDays=daysInMonth(year,month);
+  // Count current assignments
+  const assigned={};
+  doctors.forEach(d=>assigned[d.id]=0);
+  Object.values(currentAss).forEach(id=>{ if(id) assigned[id]=(assigned[id]||0)+1; });
+
+  let h='';
+  let totalTgt=0, totalAsgn=0;
+  doctors.forEach(d=>{
+    const tgt=targets[d.id]||0;
+    const asgn=assigned[d.id]||0;
+    const rem=tgt-asgn;
+    totalTgt+=tgt; totalAsgn+=asgn;
+    const bc=d.type==='senin'?'badge-sn':'badge-hn';
+    const bt=d.type==='senin'?'専任':'併任';
+    h+=`<tr>
+      <td style="font-weight:500">${d.name}</td>
+      <td><span class="badge ${bc}">${bt}</span></td>
+      <td><input class="st-input" type="number" min="0" max="31" value="${tgt}" id="st-${d.id}" onchange="liveUpdateRemain('${d.id}','${k}')"></td>
+      <td style="text-align:center;color:var(--tx-m)">${asgn}</td>
+      <td id="rem-${d.id}" class="st-remain${rem<0?' ov':''}" style="text-align:center">${rem}</td>
+    </tr>`;
+  });
+  document.getElementById('shift-target-tbody').innerHTML=h;
+  renderShiftTotals(totalTgt, totalAsgn, totalDays);
+}
+
+function renderShiftTotals(totalTgt, totalAsgn, totalDays) {
+  const diff = totalTgt - totalDays;
+  const diffCls = diff===0 ? 'color:#16A34A;font-weight:700' : 'color:#EF4444;font-weight:700';
+  const diffTxt = diff===0 ? '✅ 一致' : diff>0 ? `+${diff}（多い）` : `${diff}（少ない）`;
+  const foot = `<tr style="border-top:2px solid var(--border);background:var(--teal-bg)">
+    <td colspan="2" style="font-weight:700;padding:8px 12px;font-size:13px">合計</td>
+    <td style="text-align:center;padding:8px 12px">
+      <span id="total-tgt" style="font-size:16px;font-weight:700;color:var(--teal-d)">${totalTgt}</span>
+      <span style="font-size:11px;color:var(--tx-l)"> / ${totalDays}日</span>
+      <span style="font-size:11px;margin-left:6px;${diffCls}">${diffTxt}</span>
+    </td>
+    <td style="text-align:center;padding:8px 12px;font-weight:700">${totalAsgn}</td>
+    <td style="text-align:center;padding:8px 12px;font-weight:700;color:var(--teal-d)">${totalTgt-totalAsgn}</td>
+  </tr>`;
+  document.getElementById('shift-target-tfoot').innerHTML=foot;
+}
+
+function liveUpdateRemain(docId, mk) {
+  const tgt=parseInt(document.getElementById('st-'+docId).value)||0;
+  const asgn=Object.values(currentAss).filter(id=>id===docId).length;
+  const rem=tgt-asgn;
+  const el=document.getElementById('rem-'+docId);
+  if(el){el.textContent=rem;el.className='st-remain'+(rem<0?' ov':'');}
+  // Recompute totals live
+  const year=parseInt(document.getElementById('a-year').value);
+  const month=parseInt(document.getElementById('a-month').value);
+  const totalDays=daysInMonth(year,month);
+  const doctors=DB.doctors;
+  let totalTgt=0, totalAsgn=0;
+  doctors.forEach(d=>{
+    const inp=document.getElementById('st-'+d.id);
+    const t=inp?parseInt(inp.value)||0:0;
+    const a=Object.values(currentAss).filter(id=>id===d.id).length;
+    totalTgt+=t; totalAsgn+=a;
+  });
+  renderShiftTotals(totalTgt, totalAsgn, totalDays);
+}
+
+function saveShiftTargets() {
+  const year=parseInt(document.getElementById('a-year').value);
+  const month=parseInt(document.getElementById('a-month').value);
+  const k=monKey(year,month);
+  const targets={};
+  DB.doctors.forEach(d=>{
+    const inp=document.getElementById('st-'+d.id);
+    if(inp) targets[d.id]=parseInt(inp.value)||0;
+  });
+  DB.shiftTargets[k]=targets;
+  saveDB();
+  alert('✅ シフト目標を保存しました');
+}
+
+function copyLastMonthTargets() {
+  const year=parseInt(document.getElementById('a-year').value);
+  const month=parseInt(document.getElementById('a-month').value);
+  const lm=month===1?12:month-1;
+  const ly=month===1?year-1:year;
+  // Try last month first, then fall back to defaults
+  const lastTargets=DB.shiftTargets[monKey(ly,lm)]||{};
+  const src=Object.keys(lastTargets).length ? lastTargets : getShiftTargets(year,month);
+  DB.doctors.forEach(d=>{
+    const inp=document.getElementById('st-'+d.id);
+    if(inp&&src[d.id]!==undefined) inp.value=src[d.id];
+  });
+  const days=daysInMonth(year,month);
+  const msg=Object.keys(lastTargets).length
+    ? `先月の設定をコピーしました（${days}日月）。内容を確認して保存してください。`
+    : `デフォルト値をセットしました（${days}日月）。内容を確認して保存してください。`;
+  alert(msg);
+}
+
+function runAutoAssign() {
+  const year=parseInt(document.getElementById('a-year').value);
+  const month=parseInt(document.getElementById('a-month').value);
+  // Auto-save targets first
+  const k=monKey(year,month);
+  const targets={};
+  DB.doctors.forEach(d=>{ const inp=document.getElementById('st-'+d.id); if(inp) targets[d.id]=parseInt(inp.value)||0; });
+  DB.shiftTargets[k]=targets;
+
+  const total=daysInMonth(year,month);
+  const doctors=[...DB.doctors].sort((a,b)=>a.order-b.order);
+  const assigned={}; doctors.forEach(d=>assigned[d.id]=0);
+  const assignment={};
+  let prevId=null;
+
+  for(let d=1;d<=total;d++) {
+    const date=ds(year,month,d);
+    const dw=dow(date);
+
+    // Get available candidates — ◎/○/blank OK、× はスキップ
+    let cands=doctors.filter(dc=>{
+      const sc=DB.schedules[scKey(year,month,dc.id)]||{};
+      const entry=sc[date];
+      if(typeof entry==='string' && entry==='unavailable') return false;
+      if(entry && typeof entry==='object' && entry.am==='unavailable' && entry.pm==='unavailable') return false;
+      return true;
+    });
+
+    if(!cands.length){ assignment[date]=null; continue; }
+
+    // ① ターゲット厳守：目標超えの人は除外
+    cands = cands.filter(dc => (assigned[dc.id]||0) < (tgt[dc.id]||0));
+
+    if(!cands.length){ assignment[date]=null; continue; } // 全員目標達成→未定
+
+    // ② ◎ > ○ > 空欄 の優先順位
+    const getEntryVal = dc => {
+      const sc=DB.schedules[scKey(year,month,dc.id)]||{};
+      return sc[date];
+    };
+
+    const pref2 = cands.filter(dc => getEntryVal(dc)==='preferred');  // ◎
+    const pref1 = cands.filter(dc => getEntryVal(dc)==='available');  // ○
+    let pool = pref2.length ? pref2 : pref1.length ? pref1 : cands;
+
+    // Avoid consecutive
+    if(pool.length>1&&prevId) pool=pool.filter(dc=>dc.id!==prevId).length?pool.filter(dc=>dc.id!==prevId):pool;
+
+    // Sort: most remaining target first, then random
+    pool.sort((a,b)=>{
+      const remA=(targets[a.id]||0)-(assigned[a.id]||0);
+      const remB=(targets[b.id]||0)-(assigned[b.id]||0);
+      if(remB!==remA)return remB-remA;
+      return Math.random()-.5;
+    });
+
+    const chosen=pool[0];
+    assignment[date]=chosen.id;
+    assigned[chosen.id]=(assigned[chosen.id]||0)+1;
+    prevId=chosen.id;
+  }
+
+  currentAss=assignment;
+  assignDirty = true; // 自動割り振り後も編集中扱い（確定するまで保持）
+  renderAssignCal(year,month);
+}
+
+function renderAssignCal(year, month) {
+  const total=daysInMonth(year,month);
+  const firstDow=dow(ds(year,month,1));
+  const doctors=[...DB.doctors].sort((a,b)=>a.order-b.order);
+  const headers=['日','月','火','水','木','金','土'];
+
+  let h=`<div class="asgn-grid">`;
+  headers.forEach((lbl,i)=>{
+    h+=`<div class="asgn-hdr ${i===0?'sun':i===6?'sat':''}">${lbl}</div>`;
+  });
+  for(let i=0;i<firstDow;i++) h+=`<div class="asgn-cell empty"></div>`;
+
+  const docOpts=`<option value="">（未定）</option>`+doctors.map(d=>`<option value="${d.id}">${d.name}</option>`).join('');
+
+  for(let d=1;d<=total;d++) {
+    const date=ds(year,month,d);
+    const dw=dow(date);
+    let cls='asgn-cell';
+    if(dw===6)cls+=' sat'; else if(dw===0||isHol(date))cls+=' sun hol';
+    const asgn=currentAss[date]||'';
+    const holMk=isHol(date)?'🎌':'';
+
+    // その日の×医師を特定
+    const unavailIds = new Set(doctors.filter(dc=>{
+      const sc=DB.schedules[scKey(year,month,dc.id)]||{};
+      const entry=sc[date];
+      return (typeof entry==='string' && entry==='unavailable') ||
+             (entry && typeof entry==='object' && entry.am==='unavailable' && entry.pm==='unavailable');
+    }).map(dc=>dc.id));
+
+    // ×の先生には ⚠️マーク
+    const opts = doctors.map(dc=>{
+      const isUnavail = unavailIds.has(dc.id);
+      return `<option value="${dc.id}" ${dc.id===asgn?'selected':''} ${isUnavail?'style="color:#EF4444"':''}>${isUnavail?'⚠️ ':''}${dc.name}</option>`;
+    }).join('');
+
+    // 割り当て医師が×なら赤ハイライト
+    const warnCls = (asgn && unavailIds.has(asgn)) ? ' asgn-warn' : '';
+    // unavailIdsをdata属性で渡す（onchange内でダブルクォートが壊れるのを防ぐ）
+    const unavailAttr = [...unavailIds].join(',');
+
+    h+=`<div class="${cls}${warnCls}">
+      <div class="ac-d">${d}${holMk}</div>
+      <select data-date="${date}" data-unavail="${unavailAttr}" onchange="updateAsgn(this)">
+        ${opts}
+        <option value="" ${!asgn?'selected':''}>（未定）</option>
+      </select>
+    </div>`;
+  }
+  h+=`</div>`;
+
+  // Count summary
+  const mc={};
+  doctors.forEach(d=>mc[d.id]=0);
+  const targets=getShiftTargets(year,month);
+  Object.values(currentAss).forEach(id=>{ if(id) mc[id]=(mc[id]||0)+1; });
+  const maxC=Math.max(1,...doctors.map(d=>mc[d.id]||0));
+
+  h+=`<div class="sec">
+    <div class="sec-t" style="margin-bottom:10px">📊 当月担当回数（目標 vs 実績）</div>
+    <table class="cnt-table"><thead><tr><th style="text-align:left">医師名</th><th>目標</th><th>実績</th><th>差</th></tr></thead><tbody>`;
+  doctors.forEach(d=>{
+    const tgt=targets[d.id]||0;
+    const cnt=mc[d.id]||0;
+    const diff=cnt-tgt;
+    const diffCls=diff>0?'color:#EF4444':diff<0?'color:#D97706':'color:#16A34A';
+    h+=`<tr>
+      <td>${d.name}</td>
+      <td>${tgt}</td>
+      <td><div class="cnt-bar"><div class="cnt-fill" style="width:${cnt/Math.max(1,maxC)*80}px;min-width:${cnt>0?4:0}px"></div><span>${cnt}</span></div></td>
+      <td style="${diffCls};font-weight:700">${diff>0?'+'+diff:diff}</td>
+    </tr>`;
+  });
+  h+=`</tbody></table></div>`;
+
+  document.getElementById('assign-area').innerHTML=h;
+  // Also refresh shift targets display
+  renderShiftTargets(year, month);
+}
+
+function updateAsgn(sel) {
+  const date = sel.dataset.date;
+  const docId = sel.value;
+  const unavailIds = sel.dataset.unavail ? sel.dataset.unavail.split(',') : [];
+  assignDirty = true;
+  currentAss[date] = docId || null;
+  renderAssignCal(parseInt(document.getElementById('a-year').value), parseInt(document.getElementById('a-month').value));
+}
+
+function confirmAssignment() {
+  const year=parseInt(document.getElementById('a-year').value);
+  const month=parseInt(document.getElementById('a-month').value);
+  const k=monKey(year,month);
+  DB.assignments[k]={...currentAss};
+  const fy=month>=4?year:year-1;
+  recalcCumulative(fy);
+  assignDirty = false;
+  acceptedOverrides.clear();
+
+  // デバッグ用：保存内容を画面表示
+  const assData = DB.assignments[k] || {};
+  const entries = Object.entries(assData).map(([d,id])=>{
+    const doc = DB.doctors.find(dc=>dc.id===id);
+    return d + ': ' + (doc?doc.name:id);
+  }).join('\n');
+  const msg = `【保存内容確認】${year}年${month}月\n件数: ${Object.keys(assData).length}件\n\n${entries}\n\n---\nこの内容で保存しますか？`;
+  if (!confirm(msg)) return;
+
+  saveDB(() => alert('✅ 保存成功しました！'));
+}
+
+function resetAssignment() {
+  const btn = document.getElementById('reset-assign-btn');
+  if (!btn) return;
+  if (btn.dataset.confirming === '1') {
+    const year=parseInt(document.getElementById('a-year').value);
+    const month=parseInt(document.getElementById('a-month').value);
+    const k=monKey(year,month);
+    currentAss = {};
+    assignDirty = false;
+    delete DB.assignments[k];
+    const fy=month>=4?year:year-1;
+    recalcCumulative(fy);
+    saveDB();
+    renderAssignCal(year, month);
+    renderShiftTargets(year, month);
+    btn.textContent = '🔄 割り振りリセット';
+    btn.dataset.confirming = '0';
+  } else {
+    btn.textContent = '本当にリセット？ もう一度押して確定';
+    btn.dataset.confirming = '1';
+    setTimeout(() => {
+      btn.textContent = '🔄 割り振りリセット';
+      btn.dataset.confirming = '0';
+    }, 3000);
+  }
+}
+
+function recalcCumulative(fy) {
+  const fyKey='fy'+fy;
+  DB.cumulative[fyKey]={};
+  for(let m=4;m<=15;m++){
+    const am=m>12?m-12:m; const ay=m>12?fy+1:fy;
+    const ass=DB.assignments[monKey(ay,am)]||{};
+    Object.values(ass).forEach(id=>{ if(id) DB.cumulative[fyKey][id]=(DB.cumulative[fyKey][id]||0)+1; });
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  T4: CALENDAR VIEW
+// ══════════════════════════════════════════════════
+function renderCalTab() {
+  const year=parseInt(document.getElementById('c-year').value);
+  const month=parseInt(document.getElementById('c-month').value);
+  const k=monKey(year,month);
+  const ass=DB.assignments[k]||{};
+  const total=daysInMonth(year,month);
+  const firstDow=dow(ds(year,month,1));
+  const docs=DB.doctors;
+
+  let h=`<div style="text-align:center;margin-bottom:14px">
+    <h3 style="font-family:var(--fd);font-size:17px;font-weight:700">${year}年${month}月 先端医療開発科当番表</h3>
+    <p style="font-size:11px;color:var(--tx-l)">夜間・休日オンコール</p>
+  </div>`;
+
+  h+=`<div class="pr-cal" style="margin-bottom:16px">`;
+  ['日','月','火','水','木','金','土'].forEach((lbl,i)=>{
+    h+=`<div class="pr-hdr ${i===0?'sun':i===6?'sat':''}">${lbl}</div>`;
+  });
+  for(let i=0;i<firstDow;i++) h+=`<div class="pr-cell empty"></div>`;
+
+  for(let d=1;d<=total;d++){
+    const date=ds(year,month,d);
+    const dw=dow(date);
+    let cls='pr-cell';
+    if(dw===6)cls+=' sat'; else if(dw===0||isHol(date))cls+=' sun hol';
+    const docId=ass[date];
+    const doc=docId?docs.find(x=>x.id===docId):null;
+    const holMk=isHol(date)?'🎌':'';
+    h+=`<div class="${cls}">
+      <div class="pr-dn">${d}${holMk}</div>
+      <div class="pr-dr">${doc?doc.name:''}</div>
+    </div>`;
+  }
+  h+=`</div>`;
+
+  // Contact list
+  const sorted=[...DB.doctors].sort((a,b)=>a.order-b.order);
+  h+=`<div style="background:#fff;border-radius:var(--r);padding:14px;border:1px solid var(--border)">
+    <div class="sec-t" style="margin-bottom:10px">📞 緊急連絡先</div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr>
+      <th style="padding:5px 8px;background:var(--teal-bg);color:var(--teal-d);text-align:left">氏名</th>
+      <th style="padding:5px 8px;background:var(--teal-bg);color:var(--teal-d)">PHS</th>
+      <th style="padding:5px 8px;background:var(--teal-bg);color:var(--teal-d)">携帯</th>
+    </tr></thead><tbody>`;
+  sorted.forEach((d,i)=>{
+    h+=`<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:5px 8px;font-weight:500">${i+1}. ${d.name}</td>
+      <td style="padding:5px 8px;text-align:center">${d.phs}</td>
+      <td style="padding:5px 8px">${d.mobile||'—'}</td>
+    </tr>`;
+  });
+  h+=`</tbody></table></div>`;
+  document.getElementById('cal-view').innerHTML=h;
+}
+
+// ══════════════════════════════════════════════════
+//  T5: EXPORT
+// ══════════════════════════════════════════════════
+function exportExcel() {
+  const year=parseInt(document.getElementById('e-year').value);
+  const month=parseInt(document.getElementById('e-month').value);
+  const k=monKey(year,month);
+  const ass=DB.assignments[k]||{};
+  const total=daysInMonth(year,month);
+  const docs=DB.doctors;
+
+  const wb=XLSX.utils.book_new();
+  // ── シート1: 貼り付け用（CDEF列 + L列）1日2行 ──
+  const rows=[];
+  // ヘッダー行（テンプレートのrow3に対応）
+  rows.push(['日付','曜日','不在医師①','期間','不在医師②','期間','','','','','','夜間・休日オンコール','']);
+  // 空白行（2行目のスペーサー）
+  rows.push(['','','','','','','','','','','','','']);
+
+  for(let d=1;d<=total;d++){
+    const date=ds(year,month,d);
+    const dw=dow(date);
+    const dayLabel=`${month}/${d}`;
+    const weekLabel=isHol(date)?'祝':jpDow(dw);
+
+    // 不在医師を取得（その日の全員）
+    const dayAbs=DB.absences.filter(a=>a.date===date)
+      .sort((a,b)=>{
+        const da=docs.find(x=>x.id===a.doctorId);
+        const db=docs.find(x=>x.id===b.doctorId);
+        return (da?.order||99)-(db?.order||99);
+      });
+
+    // オンコール
+    const docId=ass[date];
+    const doc=docId?docs.find(x=>x.id===docId):null;
+    const oncall=doc?`${doc.name}/${doc.phs||'—'}`:'';
+
+    // 1行目: 不在1, 不在2, L=オンコール
+    const abs0=dayAbs[0];
+    const abs1=dayAbs[1];
+    const getLabel=(a)=>{
+      if(!a) return '';
+      const dc=docs.find(x=>x.id===a.doctorId);
+      return dc?`${dc.name}/${dc.phs||'—'}`:'';
+    };
+    rows.push([
+      dayLabel, weekLabel,
+      getLabel(abs0), abs0?.period||'',
+      getLabel(abs1), abs1?.period||'',
+      '','','','','',
+      oncall,''
+    ]);
+
+    // 2行目: 不在3以降
+    const abs2=dayAbs[2];
+    const abs3=dayAbs[3];
+    rows.push([
+      '','',
+      getLabel(abs2), abs2?.period||'',
+      getLabel(abs3), abs3?.period||'',
+      '','','','','','',''
+    ]);
+  }
+
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[
+    {wch:8},{wch:5},    // A:日付 B:曜日
+    {wch:16},{wch:6},   // C:不在①  D:期間
+    {wch:16},{wch:6},   // E:不在②  F:期間
+    {wch:2},{wch:2},{wch:2},{wch:2},{wch:2}, // G-K (空)
+    {wch:18},{wch:8}    // L:オンコール  M:備考
+  ];
+
+  // ヘッダー行の背景色
+  const headerFill={patternType:'solid',fgColor:{rgb:'E2F0D9'}};
+  ['A1','B1','C1','D1','E1','F1','L1'].forEach(ref=>{
+    if(ws[ref]) ws[ref].s={fill:headerFill,font:{bold:true}};
+  });
+
+  XLSX.utils.book_append_sheet(wb,ws,`${year}年${month}月_貼付用`);
+
+  // ── シート2: 当番表（参考） ──
+  const rows2=[];
+  rows2.push([`${year}年${month}月 先端医療開発科 夜間・休日オンコール当番表`]);
+  rows2.push(['日付','曜日','オンコール担当']);
+  for(let d=1;d<=total;d++){
+    const date=ds(year,month,d);
+    const dw=dow(date);
+    const docId=ass[date];
+    const doc=docId?docs.find(x=>x.id===docId):null;
+    rows2.push([`${month}/${d}`, isHol(date)?'祝':jpDow(dw), doc?`${doc.name}（PHS:${doc.phs||'—'}）`:'未設定']);
+  }
+  const ws2=XLSX.utils.aoa_to_sheet(rows2);
+  ws2['!cols']=[{wch:8},{wch:5},{wch:22}];
+  XLSX.utils.book_append_sheet(wb,ws2,`${year}年${month}月_当番表`);
+
+  XLSX.writeFile(wb,`先端OC_貼付用_${year}${String(month).padStart(2,'0')}.xlsx`);
+}
+
+function changePin() {
+  const p=document.getElementById('new-pin').value.trim();
+  if(!/^\d{4}$/.test(p)){alert('4桁の数字を入力してください');return;}
+  DB.pin=p; saveDB(); document.getElementById('new-pin').value=''; alert('✅ PINコードを変更しました');
+}
+
+function resetYearData() {
+  const btn = document.getElementById('reset-year-btn');
+  if (!btn) return;
+  if (btn.dataset.confirming === '1') {
+    DB.schedules={}; DB.assignments={}; DB.shiftTargets={}; DB.absences=[]; DB.cumulative={};
+    saveDB();
+    btn.dataset.confirming = '0';
+    btn.textContent = '⚠️ 年度データをリセット';
+    btn.style.cssText = '';
+    alert('✅ リセットしました');
+  } else {
+    btn.dataset.confirming = '1';
+    btn.textContent = '本当に削除？ もう一度押して確定';
+    btn.style.background = '#EF4444';
+    btn.style.color = 'white';
+    btn.style.borderColor = '#EF4444';
+    setTimeout(() => {
+      if (btn && btn.dataset.confirming === '1') {
+        btn.dataset.confirming = '0';
+        btn.textContent = '⚠️ 年度データをリセット';
+        btn.style.cssText = '';
+      }
+    }, 4000);
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  T6: STATS
+// ══════════════════════════════════════════════════
+function renderStatsTab() {
+  const fy=parseInt(document.getElementById('st-year').value);
+  recalcCumulative(fy);
+  const fyKey='fy'+fy;
+  const counts=DB.cumulative[fyKey]||{};
+  const doctors=[...DB.doctors].sort((a,b)=>a.order-b.order);
+  const maxC=Math.max(1,...doctors.map(d=>counts[d.id]||0));
+
+  let h=`<div class="sec">
+    <div class="sec-t" style="margin-bottom:14px">📊 ${fy}年度（4月〜翌3月）累計担当回数</div>`;
+
+  doctors.forEach(d=>{
+    const cnt=counts[d.id]||0;
+    const pct=maxC>0?cnt/maxC*100:0;
+    h+=`<div style="margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <div style="width:76px;font-size:12px;font-weight:500;flex-shrink:0">${d.name}</div>
+        <div style="flex:1;background:#F1F5F9;border-radius:4px;height:22px;overflow:hidden">
+          <div style="width:${pct}%;height:100%;background:var(--teal);border-radius:4px;display:flex;align-items:center;padding-left:7px;transition:width .5s">
+            <span style="color:#fff;font-size:11px;font-weight:700">${cnt>0?cnt+'回':''}</span>
+          </div>
+        </div>
+        <div style="font-size:14px;font-weight:700;color:var(--teal-d);width:26px;flex-shrink:0">${cnt}</div>
+      </div>
+    </div>`;
+  });
+
+  h+=`<div style="overflow-x:auto;margin-top:16px"><table class="cnt-table"><thead><tr><th style="text-align:left">医師名</th>`;
+  for(let m=4;m<=15;m++){const am=m>12?m-12:m; h+=`<th>${am}月</th>`;}
+  h+=`<th>合計</th></tr></thead><tbody>`;
+
+  doctors.forEach(d=>{
+    h+=`<tr><td>${d.name}</td>`;
+    let total=0;
+    for(let m=4;m<=15;m++){
+      const am=m>12?m-12:m; const ay=m>12?fy+1:fy;
+      const ass=DB.assignments[monKey(ay,am)]||{};
+      const cnt=Object.values(ass).filter(id=>id===d.id).length;
+      total+=cnt;
+      h+=`<td>${cnt>0?cnt:''}</td>`;
+    }
+    h+=`<td style="font-weight:700;color:var(--teal-d)">${total}</td></tr>`;
+  });
+  h+=`</tbody></table></div></div>`;
+  document.getElementById('stats-area').innerHTML=h;
+}
+
+// ══════════════════════════════════════════════════
+//  EMAIL
+// ══════════════════════════════════════════════════
+function genEmail() {
+  const year=parseInt(document.getElementById('r-year').value);
+  const month=parseInt(document.getElementById('r-month').value);
+  document.getElementById('em-target').value=`${month}月`;
+  document.getElementById('em-dl').value='';
+  updateEmailPreview();
+  document.getElementById('email-modal').classList.add('open');
+}
+
+function updateEmailPreview() {
+  const tgt=document.getElementById('em-target').value||'○月';
+  const dl=document.getElementById('em-dl').value||'○月○○日（○）';
+  document.getElementById('em-preview').textContent=
+`先生方
+
+お疲れさまです。
+先端医療開発科の${tgt}のオンコールアンケートをお願いいたします。
+以下のシステムからご自身のお名前を選択し、
+実施可能な日を○、できない日を×でご入力ください。
+
+${dl}までにご入力いただけますと幸いです。
+
+【専任医師の先生へ】
+平日・土日の不在日をご記入ください。
+
+【併任医師の先生へ】
+当直・学会等で対応不可の日を×で、
+ご希望の担当日があれば○でご記入ください。
+
+どうぞよろしくお願いいたします。
+先端医療開発科`;
+}
+
+function copyEmail() {
+  navigator.clipboard.writeText(document.getElementById('em-preview').textContent)
+    .then(()=>alert('✅ クリップボードにコピーしました'));
 }
 </script>
 </body>
