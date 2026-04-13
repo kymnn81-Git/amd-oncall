@@ -1927,8 +1927,11 @@ function runAutoAssign() {
 
     if(!cands.length){ assignment[date]=null; continue; }
 
-    // ① ターゲット厳守：目標超えの人は除外
-    cands = cands.filter(dc => (assigned[dc.id]||0) < (targets[dc.id]||0));
+    // ① ターゲット厳守：目標超えの人は除外（目標合計が0の場合はスキップ）
+    const totalTarget = Object.values(targets).reduce((s,v)=>s+v, 0);
+    if (totalTarget > 0) {
+      cands = cands.filter(dc => (assigned[dc.id]||0) < (targets[dc.id]||0));
+    }
 
     if(!cands.length){ assignment[date]=null; continue; } // 全員目標達成→未定
 
