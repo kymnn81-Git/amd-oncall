@@ -607,6 +607,18 @@ body{font-family:var(--f);background:var(--cream);color:var(--tx);min-height:100
         <div class="info-box">テンプレートのCDEF列（不在医師①②）とL列（夜間オンコール）に貼り付けられる形式で出力します。1日2行の構成です。</div>
         <button class="btn btn-p" onclick="exportExcel()">📊 Excelダウンロード</button>
       </div>
+
+      <div class="sec" style="margin-top:14px;border:2px solid #3b82f6;border-radius:12px;padding:16px">
+        <div class="sec-t" style="color:#1d4ed8">💾 データバックアップ</div>
+        <p style="font-size:13px;color:#475569;margin:0 0 12px">全データ（当番表・スケジュール・不在情報）をJSONファイルで保存します。月1回程度の定期保存を推奨します。</p>
+        <button class="btn btn-p" onclick="downloadBackup()" style="margin-bottom:10px">💾 バックアップをダウンロード</button>
+        <div style="margin-top:10px">
+          <p style="font-size:13px;color:#475569;margin:0 0 8px">⚠️ バックアップから復元（データが上書きされます）</p>
+          <input type="file" id="restore-file" accept=".json" style="font-size:13px;margin-bottom:8px">
+          <button class="btn btn-d btn-sm" onclick="restoreFromBackup()">📂 このファイルで復元する</button>
+        </div>
+      </div>
+
       <div class="sec" style="margin-top:14px">
         <div class="sec-t">🔑 管理者設定</div>
         <div class="fg">
@@ -771,19 +783,29 @@ function saveAssignments(year, month) {
 // 管理者専用：DB全体を保存
 async function saveDB(onSuccess) {
   if (saveTimer) clearTimeout(saveTimer);
-  const snapshot = JSON.parse(JSON.stringify(DB));
   isSaving = true;
-  console.log('💾 保存開始 assignments keys:', Object.keys(snapshot.assignments || {}));
-  console.log('💾 保存データ:', JSON.stringify(snapshot.assignments));
+  // 管理者フィールドのみ更新（schedules・assignmentsは絶対に触らない）
+  const adminFields = {
+    doctors:      JSON.parse(JSON.stringify(DB.doctors || [])),
+    pin:          DB.pin || '1234',
+    shiftTargets: JSON.parse(JSON.stringify(DB.shiftTargets || {})),
+    cumulative:   JSON.parse(JSON.stringify(DB.cumulative || {})),
+  };
   try {
-    await DOC_REF.set(snapshot);
-    console.log('✅ Firestore書き込み成功');
-    setTimeout(() => { isSaving = false; }, 2000);
+    await DOC_REF.update(adminFields);
+    setTimeout(() => { isSaving = false; }, 1000);
     if (onSuccess) onSuccess();
   } catch(e) {
-    isSaving = false;
-    console.error('❌ 保存失敗:', e);
-    alert('⚠️ 保存失敗: ' + e.code + '\n' + e.message);
+    // ドキュメントが存在しない場合はsetで作成（初回のみ）
+    if (e.code === 'not-found') {
+      await DOC_REF.set({ ...adminFields, schedules:{}, assignments:{}, absences:[] });
+    } else {
+      isSaving = false;
+      console.error('saveDB error:', e);
+      alert('⚠️ 保存失敗: ' + e.message);
+    }
+    setTimeout(() => { isSaving = false; }, 1000);
+    if (onSuccess) onSuccess();
   }
 }
 
@@ -2176,6 +2198,37 @@ function renderCalTab() {
 // ══════════════════════════════════════════════════
 //  T5: EXPORT
 // ══════════════════════════════════════════════════
+// ── バックアップ ──────────────────────────────
+function downloadBackup() {
+  const snap = JSON.parse(JSON.stringify(DB));
+  const now = new Date();
+  const ts = now.getFullYear() + ('0'+(now.getMonth()+1)).slice(-2) + ('0'+now.getDate()).slice(-2);
+  const json = JSON.stringify(snap, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `amd-oncall-backup-${ts}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function restoreFromBackup() {
+  const file = document.getElementById('restore-file').files[0];
+  if (!file) { alert('JSONファイルを選択してください'); return; }
+  if (!confirm('⚠️ 現在のデータが全て上書きされます。\n本当に復元しますか？')) return;
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    await DOC_REF.set(data);
+    DB = mergeWithDefaults(data);
+    alert('✅ 復元完了しました！');
+    refreshCurrentScreen();
+  } catch(e) {
+    alert('❌ 復元失敗: ' + e.message);
+  }
+}
+
 function exportExcel() {
   const year=parseInt(document.getElementById('e-year').value);
   const month=parseInt(document.getElementById('e-month').value);
