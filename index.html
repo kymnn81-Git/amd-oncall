@@ -610,12 +610,17 @@ body{font-family:var(--f);background:var(--cream);color:var(--tx);min-height:100
 
       <div class="sec" style="margin-top:14px;border:2px solid #3b82f6;border-radius:12px;padding:16px">
         <div class="sec-t" style="color:#1d4ed8">💾 データバックアップ</div>
-        <p style="font-size:13px;color:#475569;margin:0 0 12px">全データ（当番表・スケジュール・不在情報）をJSONファイルで保存します。月1回程度の定期保存を推奨します。</p>
-        <button class="btn btn-p" onclick="downloadBackup()" style="margin-bottom:10px">💾 バックアップをダウンロード</button>
-        <div style="margin-top:10px">
-          <p style="font-size:13px;color:#475569;margin:0 0 8px">⚠️ バックアップから復元（データが上書きされます）</p>
+        <p style="font-size:13px;color:#475569;margin:0 0 12px">割り振り確定時に自動でバックアップが保存されます。手動でもダウンロードできます。</p>
+        <button class="btn btn-p" onclick="downloadBackup()" style="margin-bottom:14px">💾 今すぐバックアップをダウンロード</button>
+
+        <div class="sec-t" style="font-size:13px;margin-bottom:8px">🕐 自動バックアップ履歴から復元</div>
+        <button class="btn btn-s btn-sm" onclick="loadBackupList()" style="margin-bottom:8px">📋 バックアップ一覧を読み込む</button>
+        <div id="backup-list" style="margin-top:8px"></div>
+
+        <div style="margin-top:14px;padding-top:14px;border-top:1px solid #e2e8f0">
+          <p style="font-size:13px;color:#475569;margin:0 0 8px">📂 JSONファイルから手動復元</p>
           <input type="file" id="restore-file" accept=".json" style="font-size:13px;margin-bottom:8px">
-          <button class="btn btn-d btn-sm" onclick="restoreFromBackup()">📂 このファイルで復元する</button>
+          <button class="btn btn-d btn-sm" onclick="restoreFromBackup()">このファイルで復元する</button>
         </div>
       </div>
 
@@ -717,6 +722,7 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db_fs = firebase.firestore();
 const DOC_REF = db_fs.collection('oncall').doc('main');
+const BACKUP_REF = db_fs.collection('oncall_backup'); // 自動バックアップ用コレクション
 
 // セーブ中フラグ（競合防止）
 let saveTimer = null;
@@ -2087,13 +2093,32 @@ function confirmAssignment() {
   recalcCumulative(fy);
   assignDirty = false;
   acceptedOverrides.clear();
-  // assignments と cumulative だけ部分更新（DB全体の上書きをしない）
-  // ハイフン入りキーはdot notationが使えないためネストオブジェクトで更新
   const newAssignments = Object.assign({}, DB.assignments);
   const newCumulative = Object.assign({}, DB.cumulative);
   DOC_REF.update({ assignments: newAssignments, cumulative: newCumulative })
-    .then(() => alert('✅ 当番表を確定・保存しました'))
+    .then(() => {
+      // 自動バックアップ保存
+      autoBackup();
+      alert('✅ 当番表を確定・保存しました\n💾 バックアップも自動保存されました');
+    })
     .catch(e => alert('⚠️ 保存失敗: ' + e.message));
+}
+
+// 確定保存のたびに自動バックアップ
+async function autoBackup() {
+  try {
+    const now = new Date();
+    const ts = now.getFullYear()
+      + ('0'+(now.getMonth()+1)).slice(-2)
+      + ('0'+now.getDate()).slice(-2)
+      + ('0'+now.getHours()).slice(-2)
+      + ('0'+now.getMinutes()).slice(-2);
+    const snap = JSON.parse(JSON.stringify(DB));
+    snap._backupAt = now.toISOString();
+    await BACKUP_REF.doc(ts).set(snap);
+  } catch(e) {
+    console.error('自動バックアップ失敗:', e);
+  }
 }
 
 function resetAssignment() {
@@ -2198,6 +2223,55 @@ function renderCalTab() {
 // ══════════════════════════════════════════════════
 //  T5: EXPORT
 // ══════════════════════════════════════════════════
+// バックアップ一覧を読み込んで表示
+async function loadBackupList() {
+  const area = document.getElementById('backup-list');
+  area.innerHTML = '<p style="font-size:13px;color:#64748b">読み込み中...</p>';
+  try {
+    const snap = await BACKUP_REF.orderBy(firebase.firestore.FieldPath.documentId(), 'desc').limit(10).get();
+    if (snap.empty) {
+      area.innerHTML = '<p style="font-size:13px;color:#64748b">バックアップはまだありません。割り振りを確定すると自動保存されます。</p>';
+      return;
+    }
+    let h = '<div style="display:flex;flex-direction:column;gap:8px">';
+    snap.forEach(doc => {
+      const d = doc.id; // YYYYMMDDHHmm
+      const label = `${d.slice(0,4)}/${d.slice(4,6)}/${d.slice(6,8)} ${d.slice(8,10)}:${d.slice(10,12)}`;
+      const data = doc.data();
+      const aKeys = Object.keys(data.assignments||{}).sort();
+      const months = aKeys.map(k=>k.replace('-','年').replace(/(\d+)$/,m=>m+'月')).join('・');
+      h += `<div style="display:flex;justify-content:space-between;align-items:center;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px">
+        <div>
+          <div style="font-size:13px;font-weight:bold;color:#1e293b">🕐 ${label}</div>
+          <div style="font-size:12px;color:#64748b">${months||'データなし'}</div>
+        </div>
+        <button class="btn btn-s btn-sm" onclick="restoreFromFirebase('${doc.id}')" style="font-size:12px;padding:6px 12px">復元</button>
+      </div>`;
+    });
+    h += '</div>';
+    area.innerHTML = h;
+  } catch(e) {
+    area.innerHTML = '<p style="font-size:13px;color:#ef4444">読み込み失敗: ' + e.message + '</p>';
+  }
+}
+
+// Firebaseバックアップから復元
+async function restoreFromFirebase(docId) {
+  if (!confirm(`⚠️ ${docId.slice(0,4)}/${docId.slice(4,6)}/${docId.slice(6,8)} ${docId.slice(8,10)}:${docId.slice(10,12)} のバックアップで復元します。\n現在のデータは上書きされます。よろしいですか？`)) return;
+  try {
+    const snap = await BACKUP_REF.doc(docId).get();
+    if (!snap.exists) { alert('バックアップが見つかりません'); return; }
+    const data = snap.data();
+    delete data._backupAt;
+    await DOC_REF.set(data);
+    DB = mergeWithDefaults(data);
+    alert('✅ 復元完了しました！');
+    refreshCurrentScreen();
+  } catch(e) {
+    alert('❌ 復元失敗: ' + e.message);
+  }
+}
+
 // ── バックアップ ──────────────────────────────
 function downloadBackup() {
   const snap = JSON.parse(JSON.stringify(DB));
